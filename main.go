@@ -16,8 +16,10 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Flags:\n")
 		flag.PrintDefaults()
 		fmt.Fprintf(os.Stderr, "\nCommands:\n")
-		fmt.Fprintf(os.Stderr, "  build    build the static site\n")
-		fmt.Fprintf(os.Stderr, "  serve    serve the site locally\n")
+		fmt.Fprintf(os.Stderr, "  init            initialise a new site (creates template.html and pages/)\n")
+		fmt.Fprintf(os.Stderr, "  page <command>  manage pages (list, create, delete, update)\n")
+		fmt.Fprintf(os.Stderr, "  build           build the static site into dist/\n")
+		fmt.Fprintf(os.Stderr, "  serve           serve the site locally\n")
 	}
 	flag.Parse()
 
@@ -33,8 +35,12 @@ func main() {
 	}
 
 	switch args[0] {
+	case "init":
+		runInit(args[1:])
+	case "page":
+		runPage(args[1:])
 	case "build":
-		fmt.Println("build: not yet implemented")
+		runBuild(args[1:])
 	case "serve":
 		fmt.Println("serve: not yet implemented")
 	default:
