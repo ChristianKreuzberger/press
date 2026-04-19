@@ -16,16 +16,18 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		panic("could not create temp dir for binary: " + err.Error())
 	}
-	defer os.RemoveAll(tmp)
 
 	pressBinary = filepath.Join(tmp, "press")
 	cmd := exec.Command("go", "build", "-o", pressBinary, ".")
 	cmd.Dir = "."
 	if out, err := cmd.CombinedOutput(); err != nil {
+		_ = os.RemoveAll(tmp)
 		panic("could not build press binary: " + string(out))
 	}
 
-	os.Exit(m.Run())
+	code := m.Run()
+	_ = os.RemoveAll(tmp)
+	os.Exit(code)
 }
 
 // run executes press with the given arguments inside siteDir and returns

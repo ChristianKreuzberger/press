@@ -19,9 +19,9 @@ func TestToHTML_Headings(t *testing.T) {
 	for _, c := range cases {
 		got := ToHTML(c.input)
 		open := "<" + c.wantTag
-		close := "</" + c.wantTag + ">"
-		if !strings.Contains(got, open) || !strings.Contains(got, close) || !strings.Contains(got, c.wantText) {
-			t.Errorf("ToHTML(%q) = %q; want %s...%s containing %q", c.input, got, open, close, c.wantText)
+		closeTag := "</" + c.wantTag + ">"
+		if !strings.Contains(got, open) || !strings.Contains(got, closeTag) || !strings.Contains(got, c.wantText) {
+			t.Errorf("ToHTML(%q) = %q; want %s...%s containing %q", c.input, got, open, closeTag, c.wantText)
 		}
 	}
 }
@@ -113,7 +113,7 @@ func TestToHTML_EscapesHTMLInCode(t *testing.T) {
 	}
 }
 
-// GFM-specific features
+// GFM-specific features.
 func TestToHTML_Strikethrough(t *testing.T) {
 	got := ToHTML("~~struck~~")
 	if !strings.Contains(got, "<del>struck</del>") {

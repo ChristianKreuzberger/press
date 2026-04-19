@@ -2,6 +2,7 @@
 package page
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,6 +10,12 @@ import (
 )
 
 const pagesDir = "pages"
+
+// ErrPageExists is returned when a page with the given name already exists.
+var ErrPageExists = errors.New("page already exists")
+
+// ErrPageNotFound is returned when a page with the given name does not exist.
+var ErrPageNotFound = errors.New("page not found")
 
 // Page represents a single content page backed by a Markdown file.
 type Page struct {
@@ -54,7 +61,7 @@ func Create(siteDir, name string, content []byte) error {
 	}
 	path := filepath.Join(dir, name+".md")
 	if _, err := os.Stat(path); err == nil {
-		return fmt.Errorf("page %q already exists", name)
+		return fmt.Errorf("%w: %q", ErrPageExists, name)
 	}
 	return os.WriteFile(path, content, 0644)
 }
@@ -64,7 +71,7 @@ func Delete(siteDir, name string) error {
 	path := filepath.Join(PagesDir(siteDir), name+".md")
 	if err := os.Remove(path); err != nil {
 		if os.IsNotExist(err) {
-			return fmt.Errorf("page %q not found", name)
+			return fmt.Errorf("%w: %q", ErrPageNotFound, name)
 		}
 		return err
 	}
@@ -75,7 +82,7 @@ func Delete(siteDir, name string) error {
 func Update(siteDir, name string, content []byte) error {
 	path := filepath.Join(PagesDir(siteDir), name+".md")
 	if _, err := os.Stat(path); os.IsNotExist(err) {
-		return fmt.Errorf("page %q not found", name)
+		return fmt.Errorf("%w: %q", ErrPageNotFound, name)
 	}
 	return os.WriteFile(path, content, 0644)
 }
