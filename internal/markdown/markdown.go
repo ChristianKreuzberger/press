@@ -151,7 +151,7 @@ func applyInline(s string) string {
 	})
 	s = reLink.ReplaceAllStringFunc(s, func(m string) string {
 		sub := reLink.FindStringSubmatch(m)
-		return fmt.Sprintf(`<a href="%s">%s</a>`, html.EscapeString(sub[2]), sub[1])
+		return fmt.Sprintf(`<a href="%s">%s</a>`, html.EscapeString(sub[2]), html.EscapeString(sub[1]))
 	})
 	// Bold before italic so ** is consumed first.
 	s = reBold.ReplaceAllString(s, "<strong>$1</strong>")

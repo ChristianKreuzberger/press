@@ -20,8 +20,14 @@ func runInit(args []string) {
 
 	// Create pages directory
 	pagesDir := filepath.Join(siteDir, "pages")
-	if err := os.MkdirAll(pagesDir, 0755); err != nil {
-		fmt.Fprintf(os.Stderr, "error creating pages directory: %v\n", err)
+	if _, err := os.Stat(pagesDir); os.IsNotExist(err) {
+		if err := os.MkdirAll(pagesDir, 0755); err != nil {
+			fmt.Fprintf(os.Stderr, "error creating pages directory: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println("created pages/")
+	} else if err != nil {
+		fmt.Fprintf(os.Stderr, "error checking pages directory: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -37,6 +43,5 @@ func runInit(args []string) {
 		fmt.Println("template.html already exists, skipping")
 	}
 
-	fmt.Println("created pages/")
 	fmt.Println("site initialised")
 }
