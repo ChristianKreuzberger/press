@@ -53,12 +53,22 @@ detect_arch() {
 
 # ── fetch latest version ──────────────────────────────────────────────────────
 
+# Parse "tag_name" from a JSON blob.  Tries jq first (precise), falls back to
+# a sed expression that handles the standard GitHub API response format.
+parse_tag_name() {
+  if command -v jq >/dev/null 2>&1; then
+    jq -r '.tag_name'
+  else
+    grep '"tag_name"' | head -1 | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/'
+  fi
+}
+
 fetch_latest_version() {
   local version
   if command -v curl >/dev/null 2>&1; then
-    version="$(curl -fsSL "${GITHUB_API}" | grep '"tag_name"' | head -1 | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')"
+    version="$(curl -fsSL "${GITHUB_API}" | parse_tag_name)"
   elif command -v wget >/dev/null 2>&1; then
-    version="$(wget -qO- "${GITHUB_API}" | grep '"tag_name"' | head -1 | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')"
+    version="$(wget -qO- "${GITHUB_API}" | parse_tag_name)"
   else
     die "neither curl nor wget is available"
   fi
@@ -118,7 +128,11 @@ main() {
   fi
 
   local bin_src="${tmp_dir}/${BINARY}"
-  [ "${os}" = "windows" ] && bin_src="${tmp_dir}/${BINARY}.exe"
+  local bin_dest="${BINARY}"
+  if [ "${os}" = "windows" ]; then
+    bin_src="${tmp_dir}/${BINARY}.exe"
+    bin_dest="${BINARY}.exe"
+  fi
   [ -f "${bin_src}" ] || die "binary not found in archive (expected: ${bin_src})"
 
   # Choose install directory
@@ -132,10 +146,10 @@ main() {
     mkdir -p "${install_dir}"
   fi
 
-  info "Installing to ${install_dir}/${BINARY}"
-  install -m 755 "${bin_src}" "${install_dir}/${BINARY}"
+  info "Installing to ${install_dir}/${bin_dest}"
+  install -m 755 "${bin_src}" "${install_dir}/${bin_dest}"
 
-  ok "${BINARY} ${version} installed to ${install_dir}/${BINARY}"
+  ok "${BINARY} ${version} installed to ${install_dir}/${bin_dest}"
 
   # Warn if the install directory is not in PATH
   case ":${PATH}:" in
