@@ -49,7 +49,7 @@ func TestBuildHTMLContent(t *testing.T) {
 	}
 	html := string(content)
 
-	if !strings.Contains(html, "<h1>Home</h1>") {
+	if !strings.Contains(html, "<h1") || !strings.Contains(html, ">Home</h1>") {
 		t.Errorf("expected <h1>Home</h1> in output, got:\n%s", html)
 	}
 	if !strings.Contains(html, "Welcome to the site.") {

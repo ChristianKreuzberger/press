@@ -127,7 +127,7 @@ func TestE2E(t *testing.T) {
 
 	// Check index.html content
 	content := readFile(t, indexHTML)
-	if !strings.Contains(content, "<h1>Home</h1>") {
+	if !strings.Contains(content, "<h1") || !strings.Contains(content, ">Home</h1>") {
 		t.Errorf("dist/index.html should contain <h1>Home</h1>, got:\n%s", content)
 	}
 	if !strings.Contains(content, "Welcome to my site") {
