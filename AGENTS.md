@@ -17,8 +17,14 @@ This file describes the project for AI coding agents.
 │   └── workflows/
 │       ├── ci.yml             # CI: vet, test, build on PRs and main
 │       └── release.yml        # Release: publish binaries on version tags
+├── docs/
+│   └── manifest.md            # Project manifest and design principles
 └── AGENTS.md                  # This file
 ```
+
+## Project manifest
+
+See [`docs/manifest.md`](docs/manifest.md) for the design principles that guide this project: Simplicity First, Developer & Agent Friendly, No Tracking/Marketing/Ads, and how documentation is structured.
 
 ## Development
 
