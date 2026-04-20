@@ -1,2 +1,101 @@
 # press
-Simple CLI for Agents, creating static websites, including personal websites, blogs, and portfolios
+
+> A fast, single-binary static-site generator built for developers and AI agents alike.
+
+`press` turns structured Markdown content into a clean static website — no config files, no plugin ecosystem, no magic. One binary. Zero runtime dependencies.
+
+---
+
+## Why press?
+
+Most static-site generators come with a steep learning curve: elaborate directory conventions, dozens of config knobs, and a plugin ecosystem you need to understand before you can publish a single page. `press` takes the opposite approach:
+
+- **One binary, nothing else.** Drop it on any machine and it works.
+- **Predictable layout.** `pages/` holds your content, `template.html` is your theme, `dist/` is the output. That's the whole mental model.
+- **Agent friendly.** Every action is a CLI flag or subcommand. No hidden state. Easy to script, pipeline, or drive from an AI agent.
+- **Your output is yours.** No telemetry, no analytics, no phoning home — ever.
+
+Perfect for personal websites, project landing pages, technical blogs, portfolios, and documentation sites.
+
+---
+
+## Installation
+
+### One-liner (Linux & macOS)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ChristianKreuzberger/press/main/install.sh | bash
+```
+
+The script automatically detects your OS and CPU architecture, downloads the correct binary from the [latest GitHub Release](https://github.com/ChristianKreuzberger/press/releases/latest), and installs it to `/usr/local/bin` (or `~/.local/bin` when you don't have root access).
+
+### Manual download
+
+Pre-built binaries for Linux, macOS, and Windows (amd64 & arm64) are attached to every [release](https://github.com/ChristianKreuzberger/press/releases).
+
+### Build from source
+
+```bash
+go install github.com/ChristianKreuzberger/press@latest
+```
+
+---
+
+## Quick start
+
+```bash
+# 1. Scaffold a new site in the current directory
+press init
+
+# 2. Create your first page
+press page create about
+
+# 3. Edit pages/about.md with your favourite editor, then build
+press build
+
+# 4. Open dist/index.html in a browser (or deploy the dist/ folder anywhere)
+```
+
+### All commands
+
+| Command | Description |
+|---------|-------------|
+| `press init [dir]` | Scaffold a new site (`template.html` + `pages/`) |
+| `press page list` | List all pages |
+| `press page create <name> [--file f.md]` | Create a new page |
+| `press page update <name> --file f.md` | Replace a page's content |
+| `press page delete <name>` | Delete a page |
+| `press build [-output dir]` | Build the site into `dist/` (default) |
+| `press --version` | Print the installed version |
+
+Run any command with `--help` for detailed usage.
+
+---
+
+## Project layout
+
+```
+my-site/
+├── template.html   # Your HTML theme ({{.Title}} and {{.Content}} are injected)
+├── pages/
+│   ├── index.md    # Becomes dist/index.html
+│   └── about.md    # Becomes dist/about.html
+└── dist/           # Generated output (created by `press build`)
+```
+
+---
+
+## Contributing
+
+Contributions are welcome. Please read [`AGENTS.md`](AGENTS.md) before opening a pull request — it explains the project conventions and how AI agents can contribute safely.
+
+```bash
+go build ./...   # build
+go test ./...    # run tests
+go vet ./...     # static analysis
+```
+
+## License
+
+[MIT](LICENSE)
+
