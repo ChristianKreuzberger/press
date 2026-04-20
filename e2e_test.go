@@ -214,3 +214,140 @@ func readFile(t *testing.T, path string) string {
 	}
 	return string(b)
 }
+
+func TestE2ESection(t *testing.T) {
+	siteDir := t.TempDir()
+
+	// Initialise the site first.
+	run(t, siteDir, "init")
+
+	// Create a top-level page so navigation has something to link to.
+	run(t, siteDir, "page", "create", "index")
+
+	// --- press section list (empty) ---
+	out := run(t, siteDir, "section", "list")
+	if !strings.Contains(out, "no sections") {
+		t.Errorf("empty section list should say 'no sections', got: %s", out)
+	}
+
+	// --- press section create (from file) ---
+	blogIndexMD := filepath.Join(t.TempDir(), "blog-index.md")
+	writeFile(t, blogIndexMD, "# Blog\n\nAll blog posts.\n")
+
+	run(t, siteDir, "section", "create", "blog", "--file", blogIndexMD)
+
+	blogDir := filepath.Join(siteDir, "pages", "blog")
+	if _, err := os.Stat(blogDir); err != nil {
+		t.Fatal("section create should create pages/blog/")
+	}
+	if _, err := os.Stat(filepath.Join(blogDir, "index.md")); err != nil {
+		t.Fatal("section create should create pages/blog/index.md")
+	}
+
+	// --- press section create (empty, no file flag) ---
+	run(t, siteDir, "section", "create", "docs")
+	if _, err := os.Stat(filepath.Join(siteDir, "pages", "docs", "index.md")); err != nil {
+		t.Fatal("section create without --file should still create pages/docs/index.md")
+	}
+
+	// --- duplicate section create should fail ---
+	runExpectError(t, siteDir, "section", "create", "blog")
+
+	// --- press section list ---
+	out = run(t, siteDir, "section", "list")
+	if !strings.Contains(out, "blog") {
+		t.Errorf("section list should contain 'blog', got: %s", out)
+	}
+	if !strings.Contains(out, "docs") {
+		t.Errorf("section list should contain 'docs', got: %s", out)
+	}
+
+	// Add a non-index page to the blog section manually.
+	writeFile(t, filepath.Join(blogDir, "first-post.md"), "# First Post\n\nHello world!\n")
+
+	// --- press build (with sections) ---
+	run(t, siteDir, "build")
+
+	distDir := filepath.Join(siteDir, "dist")
+
+	// Section index should be generated.
+	blogIndexHTML := filepath.Join(distDir, "blog", "index.html")
+	if _, err := os.Stat(blogIndexHTML); err != nil {
+		t.Fatal("build should produce dist/blog/index.html")
+	}
+
+	// Section sub-page should be generated.
+	firstPostHTML := filepath.Join(distDir, "blog", "first-post.html")
+	if _, err := os.Stat(firstPostHTML); err != nil {
+		t.Fatal("build should produce dist/blog/first-post.html")
+	}
+
+	// Check blog index content.
+	content := readFile(t, blogIndexHTML)
+	if !strings.Contains(content, "All blog posts.") {
+		t.Errorf("dist/blog/index.html should contain blog body, got:\n%s", content)
+	}
+	if !strings.Contains(content, "<title>Blog</title>") {
+		t.Errorf("dist/blog/index.html should have <title>Blog</title>, got:\n%s", content)
+	}
+
+	// Navigation in blog/index.html should use relative links prefixed with "../".
+	if !strings.Contains(content, "../index.html") {
+		t.Errorf("dist/blog/index.html nav should link to ../index.html, got:\n%s", content)
+	}
+	if !strings.Contains(content, "../blog/index.html") {
+		t.Errorf("dist/blog/index.html nav should link to ../blog/index.html, got:\n%s", content)
+	}
+
+	// Navigation in top-level index.html should include the section link.
+	topContent := readFile(t, filepath.Join(distDir, "index.html"))
+	if !strings.Contains(topContent, "blog/index.html") {
+		t.Errorf("dist/index.html nav should link to blog/index.html, got:\n%s", topContent)
+	}
+
+	// Check first post content.
+	postContent := readFile(t, firstPostHTML)
+	if !strings.Contains(postContent, "Hello world!") {
+		t.Errorf("dist/blog/first-post.html should contain post body, got:\n%s", postContent)
+	}
+
+	// --- press section update ---
+	updatedBlogMD := filepath.Join(t.TempDir(), "updated-blog.md")
+	writeFile(t, updatedBlogMD, "# Blog Updated\n\nUpdated description.\n")
+	run(t, siteDir, "section", "update", "blog", "--file", updatedBlogMD)
+
+	// Rebuild and verify updated section index content.
+	run(t, siteDir, "build")
+	content = readFile(t, blogIndexHTML)
+	if !strings.Contains(content, "Blog Updated") {
+		t.Errorf("dist/blog/index.html should contain updated heading, got:\n%s", content)
+	}
+	if !strings.Contains(content, "Updated description.") {
+		t.Errorf("dist/blog/index.html should contain updated body, got:\n%s", content)
+	}
+
+	// --- press section delete ---
+	run(t, siteDir, "section", "delete", "docs")
+
+	if _, err := os.Stat(filepath.Join(siteDir, "pages", "docs")); !os.IsNotExist(err) {
+		t.Fatal("pages/docs/ should have been deleted")
+	}
+
+	// Verify list no longer contains docs.
+	out = run(t, siteDir, "section", "list")
+	if strings.Contains(out, "docs") {
+		t.Errorf("section list should not contain 'docs' after delete, got: %s", out)
+	}
+	if !strings.Contains(out, "blog") {
+		t.Errorf("section list should still contain 'blog', got: %s", out)
+	}
+
+	// --- delete non-existent section should fail ---
+	runExpectError(t, siteDir, "section", "delete", "nonexistent")
+
+	// --- update non-existent section should fail ---
+	runExpectError(t, siteDir, "section", "update", "nonexistent", "--file", updatedBlogMD)
+
+	// --- section update without --file should fail ---
+	runExpectError(t, siteDir, "section", "update", "blog")
+}

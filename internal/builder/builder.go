@@ -9,6 +9,7 @@ import (
 
 	"github.com/ChristianKreuzberger/press/internal/markdown"
 	"github.com/ChristianKreuzberger/press/internal/page"
+	"github.com/ChristianKreuzberger/press/internal/section"
 )
 
 // DefaultTemplate is the HTML template used when template.html is not found.
@@ -42,10 +43,17 @@ type TemplateData struct {
 
 // Build converts all pages in siteDir to HTML files in outputDir.
 // It reads template.html from siteDir; if absent it falls back to DefaultTemplate.
+// Top-level pages (pages/*.md) are written to outputDir directly.
+// Section pages (pages/<section>/*.md) are written to outputDir/<section>/.
 func Build(siteDir, outputDir string) error {
 	pages, err := page.List(siteDir)
 	if err != nil {
 		return fmt.Errorf("listing pages: %w", err)
+	}
+
+	sections, err := section.List(siteDir)
+	if err != nil {
+		return fmt.Errorf("listing sections: %w", err)
 	}
 
 	tmplContent, err := readTemplate(siteDir)
@@ -58,37 +66,82 @@ func Build(siteDir, outputDir string) error {
 		return fmt.Errorf("parsing template: %w", err)
 	}
 
-	// Build navigation refs for all pages (title resolved from markdown).
-	pageRefs := make([]PageRef, 0, len(pages))
-	for _, p := range pages {
-		pageRefs = append(pageRefs, PageRef{
-			Title: resolveTitle(p),
-			URL:   p.Name + ".html",
-		})
-	}
+	// rootNavRefs contains navigation entries with root-relative URLs (e.g. "about.html",
+	// "blog/index.html"). These are used as-is for top-level pages, and prefixed with
+	// "../" for pages that live one level deep inside a section directory.
+	rootNavRefs := buildRootNavRefs(pages, sections)
 
 	if err := os.MkdirAll(outputDir, 0755); err != nil {
 		return fmt.Errorf("creating output directory: %w", err)
 	}
 
+	// Build top-level pages.
 	for _, p := range pages {
-		if err := buildPage(p, pageRefs, tmpl, outputDir); err != nil {
+		if err := buildPageFromPath(p.Name, p.Path, filepath.Join(outputDir, p.Name+".html"), rootNavRefs, tmpl); err != nil {
 			return err
+		}
+	}
+
+	// Build section pages.
+	for _, s := range sections {
+		sectionPages, err := section.ListPages(siteDir, s.Name)
+		if err != nil {
+			return fmt.Errorf("listing pages in section %s: %w", s.Name, err)
+		}
+		sectionOutDir := filepath.Join(outputDir, s.Name)
+		if err := os.MkdirAll(sectionOutDir, 0755); err != nil {
+			return fmt.Errorf("creating section output directory %s: %w", sectionOutDir, err)
+		}
+		// Section pages are one level deep, so prefix top-level nav URLs with "../".
+		sectionNavRefs := prefixNavRefs(rootNavRefs, "../")
+		for _, sp := range sectionPages {
+			outPath := filepath.Join(sectionOutDir, sp.Name+".html")
+			if err := buildPageFromPath(sp.Name, sp.Path, outPath, sectionNavRefs, tmpl); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
 }
 
-func buildPage(p page.Page, pageRefs []PageRef, tmpl *template.Template, outputDir string) error {
-	mdContent, err := os.ReadFile(p.Path)
+// buildRootNavRefs assembles the navigation entry list using root-relative URLs.
+// Top-level pages link to "<name>.html"; sections link to "<section>/index.html".
+func buildRootNavRefs(pages []page.Page, sections []section.Section) []PageRef {
+	refs := make([]PageRef, 0, len(pages)+len(sections))
+	for _, p := range pages {
+		refs = append(refs, PageRef{
+			Title: resolveTitleFromPath(p.Name, p.Path),
+			URL:   p.Name + ".html",
+		})
+	}
+	for _, s := range sections {
+		refs = append(refs, PageRef{
+			Title: resolveTitleFromPath(s.Name, s.IndexPath),
+			URL:   s.Name + "/index.html",
+		})
+	}
+	return refs
+}
+
+// prefixNavRefs returns a copy of refs with each URL prefixed by prefix.
+func prefixNavRefs(refs []PageRef, prefix string) []PageRef {
+	out := make([]PageRef, len(refs))
+	for i, r := range refs {
+		out[i] = PageRef{Title: r.Title, URL: prefix + r.URL}
+	}
+	return out
+}
+
+func buildPageFromPath(name, mdPath, outPath string, pageRefs []PageRef, tmpl *template.Template) error {
+	mdContent, err := os.ReadFile(mdPath)
 	if err != nil {
-		return fmt.Errorf("reading page %s: %w", p.Name, err)
+		return fmt.Errorf("reading page %s: %w", name, err)
 	}
 
 	htmlContent := markdown.ToHTML(string(mdContent))
 	title := markdown.ExtractTitle(string(mdContent))
 	if title == "" {
-		title = p.Name
+		title = name
 	}
 
 	data := TemplateData{
@@ -97,7 +150,6 @@ func buildPage(p page.Page, pageRefs []PageRef, tmpl *template.Template, outputD
 		Pages:   pageRefs,
 	}
 
-	outPath := filepath.Join(outputDir, p.Name+".html")
 	f, err := os.Create(outPath)
 	if err != nil {
 		return fmt.Errorf("creating output file %s: %w", outPath, err)
@@ -105,7 +157,7 @@ func buildPage(p page.Page, pageRefs []PageRef, tmpl *template.Template, outputD
 	defer f.Close()
 
 	if err := tmpl.Execute(f, data); err != nil {
-		return fmt.Errorf("executing template for page %s: %w", p.Name, err)
+		return fmt.Errorf("executing template for page %s: %w", name, err)
 	}
 	return nil
 }
@@ -122,13 +174,13 @@ func readTemplate(siteDir string) (string, error) {
 	return string(content), nil
 }
 
-func resolveTitle(p page.Page) string {
-	content, err := os.ReadFile(p.Path)
+func resolveTitleFromPath(name, path string) string {
+	content, err := os.ReadFile(path)
 	if err != nil {
-		return p.Name
+		return name
 	}
 	if t := markdown.ExtractTitle(string(content)); t != "" {
 		return t
 	}
-	return p.Name
+	return name
 }
