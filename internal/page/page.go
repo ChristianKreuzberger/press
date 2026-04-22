@@ -14,7 +14,7 @@ const pagesDir = "pages"
 // ErrPageExists is returned when a page with the given name already exists.
 var ErrPageExists = errors.New("page already exists")
 
-// ErrPageNotFound is returned when a page with the given name does not exist.
+// ErrInvalidName is returned when the page name would escape the pages directory.
 var ErrInvalidName = errors.New("invalid page name")
 
 // ErrPageNotFound is returned when a page with the given name does not exist.
