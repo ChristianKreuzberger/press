@@ -6,19 +6,6 @@
 
 ---
 
-## Why press?
-
-Most static-site generators come with a steep learning curve: elaborate directory conventions, dozens of config knobs, and a plugin ecosystem you need to understand before you can publish a single page. `press` takes the opposite approach:
-
-- **One binary, nothing else.** Drop it on any machine and it works.
-- **Predictable layout.** `pages/` holds your content, `template.html` is your theme, `dist/` is the output. That's the whole mental model.
-- **Agent friendly.** Every action is a CLI flag or subcommand. No hidden state. Easy to script, pipeline, or drive from an AI agent.
-- **Your output is yours.** No telemetry, no analytics, no phoning home — ever.
-
-Perfect for personal websites, project landing pages, technical blogs, portfolios, and documentation sites.
-
----
-
 ## Installation
 
 ### One-liner (Linux & macOS)
@@ -51,10 +38,10 @@ press init
 press create page about
 press create page blog/my-first-post
 
-# 3. Edit pages/about.md with your favourite editor, then build
-press build
+# 3. Run it locally
+press serve
 
-# 4. Open dist/index.html in a browser (or deploy the dist/ folder anywhere)
+# 4. Edit things and observe changes
 ```
 
 ### All commands
@@ -76,6 +63,19 @@ press build
 | `press --version` | Print the installed version |
 
 Run any command with `--help` for detailed usage.
+
+---
+
+## Why press?
+
+Most static-site generators come with a steep learning curve: elaborate directory conventions, dozens of config knobs, and a plugin ecosystem you need to understand before you can publish a single page. `press` takes the opposite approach:
+
+- **One binary, nothing else.** Drop it on any machine and it works.
+- **Predictable layout.** `pages/` holds your content, `template.html` is your theme, `dist/` is the output. That's the whole mental model.
+- **Agent friendly.** Every action is a CLI flag or subcommand. No hidden state. Easy to script, pipeline, or drive from an AI agent.
+- **Your output is yours.** No telemetry, no analytics, no phoning home — ever.
+
+Perfect for personal websites, project landing pages, technical blogs, portfolios, and documentation sites.
 
 ---
 
