@@ -62,6 +62,15 @@ func main() {
 	}
 }
 
+func mustGetwd() string {
+	dir, err := os.Getwd()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error getting current directory: %v\n", err)
+		os.Exit(1)
+	}
+	return dir
+}
+
 func nounArg(verb string, args []string) string {
 	if len(args) == 0 {
 		fmt.Fprintf(os.Stderr, "Usage: press %s <page|section> [args]\n", verb)

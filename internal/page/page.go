@@ -15,6 +15,9 @@ const pagesDir = "pages"
 var ErrPageExists = errors.New("page already exists")
 
 // ErrPageNotFound is returned when a page with the given name does not exist.
+var ErrInvalidName = errors.New("invalid page name")
+
+// ErrPageNotFound is returned when a page with the given name does not exist.
 var ErrPageNotFound = errors.New("page not found")
 
 // Page represents a single content page backed by a Markdown file.
@@ -62,7 +65,7 @@ func Create(siteDir, name string, content []byte) error {
 	// Prevent path traversal: resolved path must remain inside pages dir.
 	cleanDir := filepath.Clean(dir) + string(filepath.Separator)
 	if !strings.HasPrefix(filepath.Clean(path), cleanDir) {
-		return fmt.Errorf("invalid page name: %q", name)
+		return fmt.Errorf("%w: %q", ErrInvalidName, name)
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return err
@@ -81,7 +84,7 @@ func Delete(siteDir, name string) error {
 	// Prevent path traversal.
 	cleanDir := filepath.Clean(dir) + string(filepath.Separator)
 	if !strings.HasPrefix(filepath.Clean(path), cleanDir) {
-		return fmt.Errorf("invalid page name: %q", name)
+		return fmt.Errorf("%w: %q", ErrInvalidName, name)
 	}
 	if err := os.Remove(path); err != nil {
 		if os.IsNotExist(err) {

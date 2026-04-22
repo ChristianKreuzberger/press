@@ -11,7 +11,7 @@ import (
 )
 
 func runSectionList(_ []string) {
-	siteDir, _ := os.Getwd()
+	siteDir := mustGetwd()
 	sections, err := section.List(siteDir)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error listing sections: %v\n", err)
@@ -46,11 +46,10 @@ func runSectionCreate(args []string) {
 			os.Exit(1)
 		}
 	} else {
-		fm := frontmatter.GenerateSection(name, time.Now())
-		content = append(fm, []byte("# "+name+"\n\n")...)
+		content = append(frontmatter.GenerateSection(name, time.Now()), []byte("# "+name+"\n\n")...)
 	}
 
-	siteDir, _ := os.Getwd()
+	siteDir := mustGetwd()
 	if err := section.Create(siteDir, name, content); err != nil {
 		fmt.Fprintf(os.Stderr, "error creating section: %v\n", err)
 		os.Exit(1)
@@ -64,7 +63,7 @@ func runSectionDelete(args []string) {
 		os.Exit(1)
 	}
 	name := args[0]
-	siteDir, _ := os.Getwd()
+	siteDir := mustGetwd()
 	if err := section.Delete(siteDir, name); err != nil {
 		fmt.Fprintf(os.Stderr, "error deleting section: %v\n", err)
 		os.Exit(1)
@@ -94,7 +93,7 @@ func runSectionUpdate(args []string) {
 		os.Exit(1)
 	}
 
-	siteDir, _ := os.Getwd()
+	siteDir := mustGetwd()
 	if err := section.Update(siteDir, name, content); err != nil {
 		fmt.Fprintf(os.Stderr, "error updating section: %v\n", err)
 		os.Exit(1)

@@ -11,7 +11,7 @@ import (
 )
 
 func runPageList(_ []string) {
-	siteDir, _ := os.Getwd()
+	siteDir := mustGetwd()
 	pages, err := page.List(siteDir)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error listing pages: %v\n", err)
@@ -47,11 +47,10 @@ func runPageCreate(args []string) {
 			os.Exit(1)
 		}
 	} else {
-		fm := frontmatter.Generate(name, time.Now())
-		content = append(fm, []byte("# "+name+"\n\n")...)
+		content = append(frontmatter.Generate(name, time.Now()), []byte("# "+name+"\n\n")...)
 	}
 
-	siteDir, _ := os.Getwd()
+	siteDir := mustGetwd()
 	if err := page.Create(siteDir, name, content); err != nil {
 		fmt.Fprintf(os.Stderr, "error creating page: %v\n", err)
 		os.Exit(1)
@@ -65,7 +64,7 @@ func runPageDelete(args []string) {
 		os.Exit(1)
 	}
 	name := args[0]
-	siteDir, _ := os.Getwd()
+	siteDir := mustGetwd()
 	if err := page.Delete(siteDir, name); err != nil {
 		fmt.Fprintf(os.Stderr, "error deleting page: %v\n", err)
 		os.Exit(1)
@@ -96,7 +95,7 @@ func runPageUpdate(args []string) {
 		os.Exit(1)
 	}
 
-	siteDir, _ := os.Getwd()
+	siteDir := mustGetwd()
 	if err := page.Update(siteDir, name, content); err != nil {
 		fmt.Fprintf(os.Stderr, "error updating page: %v\n", err)
 		os.Exit(1)
