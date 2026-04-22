@@ -12,7 +12,7 @@
 *.test
 
 # binary from go build
-press
+/press
 
 # Code coverage profiles and other test artifacts
 *.out
