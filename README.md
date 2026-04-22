@@ -70,6 +70,7 @@ press build
 | `press update section <name> --file f.md` | Replace a section's index content |
 | `press delete section <name>` | Delete a section and all its pages |
 | `press build [-output dir]` | Build the site into `dist/` (default) |
+| `press tree` | Show a tree of all pages and sections |
 | `press --version` | Print the installed version |
 
 Run any command with `--help` for detailed usage.

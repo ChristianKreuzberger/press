@@ -63,6 +63,7 @@ When you request code changes (features, bug fixes, refactoring), the workflow a
 - Follow standard Go formatting (`gofmt`).
 - Commit messages should be short and descriptive.
 - Do not commit secrets or credentials.
+- When adding or updating commands, make sure they are also added to README.md.
 
 ## When creating PRs
 
