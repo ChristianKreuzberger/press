@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/ChristianKreuzberger/press/internal/builder"
+	"github.com/ChristianKreuzberger/press/internal/frontmatter"
 )
 
 func runInit(args []string) {
@@ -34,7 +36,9 @@ func runInit(args []string) {
 	// Create pages/index.md (do not overwrite if it already exists)
 	indexPath := filepath.Join(pagesDir, "index.md")
 	if _, err := os.Stat(indexPath); os.IsNotExist(err) {
-		if err := os.WriteFile(indexPath, []byte("# Home\n\nWelcome to my site.\n"), 0644); err != nil {
+		fm := frontmatter.Generate("Home", time.Now())
+		indexContent := append(fm, []byte("# Home\n\nWelcome to my site.\n")...)
+		if err := os.WriteFile(indexPath, indexContent, 0644); err != nil {
 			fmt.Fprintf(os.Stderr, "error creating pages/index.md: %v\n", err)
 			os.Exit(1)
 		}

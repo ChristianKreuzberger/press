@@ -4,7 +4,9 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"time"
 
+	"github.com/ChristianKreuzberger/press/internal/frontmatter"
 	"github.com/ChristianKreuzberger/press/internal/section"
 )
 
@@ -44,7 +46,8 @@ func runSectionCreate(args []string) {
 			os.Exit(1)
 		}
 	} else {
-		content = []byte("# " + name + "\n\n")
+		fm := frontmatter.Generate(name, time.Now())
+		content = append(fm, []byte("# "+name+"\n\n")...)
 	}
 
 	siteDir, _ := os.Getwd()

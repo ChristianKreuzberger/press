@@ -47,8 +47,9 @@ go install github.com/ChristianKreuzberger/press@latest
 # 1. Scaffold a new site in the current directory
 press init
 
-# 2. Create your first page
+# 2. Create your first page (optionally inside a section)
 press create page about
+press create page blog/my-first-post
 
 # 3. Edit pages/about.md with your favourite editor, then build
 press build
@@ -62,7 +63,7 @@ press build
 |---------|-------------|
 | `press init [dir]` | Scaffold a new site (`template.html` + `pages/`) |
 | `press list page` | List all pages |
-| `press create page <name> [--file f.md]` | Create a new page |
+| `press create page <name> [--file f.md]` | Create a new page; `name` may include sections (e.g. `blog/my-post`, `blog/2026/my-post`) |
 | `press update page <name> --file f.md` | Replace a page's content |
 | `press delete page <name>` | Delete a page |
 | `press list section` | List all sections |

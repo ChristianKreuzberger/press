@@ -75,6 +75,35 @@ func TestDeleteNotFound(t *testing.T) {
 	}
 }
 
+func TestCreateInSection(t *testing.T) {
+	dir := t.TempDir()
+	if err := Create(dir, "blog/my-post", []byte("# My Post\n")); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(PagesDir(dir), "blog", "my-post.md")
+	if _, err := os.Stat(path); err != nil {
+		t.Errorf("expected file at %s: %v", path, err)
+	}
+}
+
+func TestCreateNestedSections(t *testing.T) {
+	dir := t.TempDir()
+	if err := Create(dir, "blog/2026/my-post", []byte("# My Post\n")); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(PagesDir(dir), "blog", "2026", "my-post.md")
+	if _, err := os.Stat(path); err != nil {
+		t.Errorf("expected file at %s: %v", path, err)
+	}
+}
+
+func TestCreatePathTraversal(t *testing.T) {
+	dir := t.TempDir()
+	if err := Create(dir, "../../etc/passwd", []byte("evil")); err == nil {
+		t.Error("expected error for path traversal name, got nil")
+	}
+}
+
 func TestUpdate(t *testing.T) {
 	dir := t.TempDir()
 	if err := Create(dir, "index", []byte("# Old\n")); err != nil {

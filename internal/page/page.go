@@ -53,13 +53,20 @@ func List(siteDir string) ([]Page, error) {
 }
 
 // Create creates a new page with the given name and content.
+// name may contain forward slashes to place the page inside sub-sections
+// (e.g. "blog/my-post" or "blog/2026/my-post").
 // It returns an error if a page with that name already exists.
 func Create(siteDir, name string, content []byte) error {
 	dir := PagesDir(siteDir)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	path := filepath.Join(dir, filepath.FromSlash(name)+".md")
+	// Prevent path traversal: resolved path must remain inside pages dir.
+	cleanDir := filepath.Clean(dir) + string(filepath.Separator)
+	if !strings.HasPrefix(filepath.Clean(path), cleanDir) {
+		return fmt.Errorf("invalid page name: %q", name)
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return err
 	}
-	path := filepath.Join(dir, name+".md")
 	if _, err := os.Stat(path); err == nil {
 		return fmt.Errorf("%w: %q", ErrPageExists, name)
 	}
@@ -67,8 +74,15 @@ func Create(siteDir, name string, content []byte) error {
 }
 
 // Delete removes the page with the given name.
+// name may contain forward slashes (e.g. "blog/my-post").
 func Delete(siteDir, name string) error {
-	path := filepath.Join(PagesDir(siteDir), name+".md")
+	dir := PagesDir(siteDir)
+	path := filepath.Join(dir, filepath.FromSlash(name)+".md")
+	// Prevent path traversal.
+	cleanDir := filepath.Clean(dir) + string(filepath.Separator)
+	if !strings.HasPrefix(filepath.Clean(path), cleanDir) {
+		return fmt.Errorf("invalid page name: %q", name)
+	}
 	if err := os.Remove(path); err != nil {
 		if os.IsNotExist(err) {
 			return fmt.Errorf("%w: %q", ErrPageNotFound, name)

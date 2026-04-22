@@ -4,7 +4,9 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"time"
 
+	"github.com/ChristianKreuzberger/press/internal/frontmatter"
 	"github.com/ChristianKreuzberger/press/internal/page"
 )
 
@@ -27,7 +29,7 @@ func runPageList(_ []string) {
 func runPageCreate(args []string) {
 	// Name is the first positional argument; remaining args may contain flags.
 	if len(args) == 0 {
-		fmt.Fprintf(os.Stderr, "Usage: press create page <name> [--file <file.md>]\n")
+		fmt.Fprintf(os.Stderr, "Usage: press create page <name> [--file <file.md>]\n       name may include sections, e.g. blog/my-post or blog/2026/my-post\n")
 		os.Exit(1)
 	}
 	name := args[0]
@@ -45,7 +47,8 @@ func runPageCreate(args []string) {
 			os.Exit(1)
 		}
 	} else {
-		content = []byte("# " + name + "\n\n")
+		fm := frontmatter.Generate(name, time.Now())
+		content = append(fm, []byte("# "+name+"\n\n")...)
 	}
 
 	siteDir, _ := os.Getwd()
