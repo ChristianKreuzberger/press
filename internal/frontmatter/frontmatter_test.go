@@ -31,12 +31,40 @@ func TestGenerate_TitleWithSpecialChars(t *testing.T) {
 	}
 }
 
-func TestGenerate_TimestampFormat(t *testing.T) {
-	now := time.Date(2026, 12, 31, 23, 59, 59, 0, time.UTC)
-	got := string(Generate("test", now))
-
-	if !strings.Contains(got, "2026-12-31T23:59:59Z") {
-		t.Errorf("expected RFC3339 timestamp in output, got: %s", got)
+func TestStrip(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{
+			name:  "strips frontmatter",
+			input: "---\ntitle: \"Hello\"\n---\n# Hello\n\nBody text.\n",
+			want:  "# Hello\n\nBody text.\n",
+		},
+		{
+			name:  "no frontmatter returned unchanged",
+			input: "# Hello\n\nBody text.\n",
+			want:  "# Hello\n\nBody text.\n",
+		},
+		{
+			name:  "unclosed frontmatter returned unchanged",
+			input: "---\ntitle: \"Hello\"\n# Hello\n",
+			want:  "---\ntitle: \"Hello\"\n# Hello\n",
+		},
+		{
+			name:  "empty body after frontmatter",
+			input: "---\ntitle: \"Hello\"\n---\n",
+			want:  "",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := Strip(tt.input)
+			if got != tt.want {
+				t.Errorf("Strip():\ngot:  %q\nwant: %q", got, tt.want)
+			}
+		})
 	}
 }
 
@@ -59,5 +87,14 @@ func TestGenerate_EmptyAliasAndTags(t *testing.T) {
 	}
 	if !strings.Contains(got, "tags: []") {
 		t.Errorf("expected empty tags field, got: %s", got)
+	}
+}
+
+func TestGenerate_TimestampFormat(t *testing.T) {
+	now := time.Date(2026, 12, 31, 23, 59, 59, 0, time.UTC)
+	got := string(Generate("test", now))
+
+	if !strings.Contains(got, "2026-12-31T23:59:59Z") {
+		t.Errorf("expected RFC3339 timestamp in output, got: %s", got)
 	}
 }

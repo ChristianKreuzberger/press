@@ -44,7 +44,7 @@ func main() {
 	case "build":
 		runBuild(args[1:])
 	case "serve":
-		fmt.Println("serve: not yet implemented")
+		runServe(args[1:])
 	case "create":
 		runCreate(args[1:])
 	case "list":
