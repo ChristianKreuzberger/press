@@ -61,7 +61,7 @@ press build
 
 | Command | Description |
 |---------|-------------|
-| `press init [dir]` | Scaffold a new site (`template.html` + `pages/`) |
+| `press init [dir] [--theme name]` | Scaffold a new site (`template.html` + `pages/`); choose a built-in theme |
 | `press list page` | List all pages |
 | `press create page <name> [--file f.md]` | Create a new page; `name` may include sections (e.g. `blog/my-post`, `blog/2026/my-post`) |
 | `press update page <name> --file f.md` | Replace a page's content |
@@ -76,6 +76,22 @@ press build
 | `press --version` | Print the installed version |
 
 Run any command with `--help` for detailed usage.
+
+---
+
+## Themes
+
+press ships three built-in themes. Choose one when scaffolding a new site:
+
+```bash
+press init --theme dark      # default — GitHub-inspired dark mode
+press init --theme light     # clean editorial style with serif headings
+press init --theme terminal  # retro green-on-black, all monospace
+```
+
+The selected theme is written to `template.html`. You can edit it freely afterwards or replace it entirely with your own design.
+
+See [`docs/themes.md`](docs/themes.md) to learn how templates work and how to create a custom theme.
 
 ---
 
