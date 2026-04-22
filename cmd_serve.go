@@ -79,7 +79,13 @@ func runServe(args []string) {
 	mux := http.NewServeMux()
 	mux.Handle("/", http.FileServer(http.Dir(outputDir)))
 	go func() {
-		if err := http.ListenAndServe(addr, mux); err != nil {
+		srv := &http.Server{
+			Addr:         addr,
+			Handler:      mux,
+			ReadTimeout:  15 * time.Second,
+			WriteTimeout: 15 * time.Second,
+		}
+		if err := srv.ListenAndServe(); err != nil {
 			fmt.Fprintf(os.Stderr, "server error: %v\n", err)
 			os.Exit(1)
 		}

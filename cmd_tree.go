@@ -10,7 +10,7 @@ import (
 )
 
 func runTree(_ []string) {
-	siteDir, _ := os.Getwd()
+	siteDir := mustGetwd()
 
 	pages, err := page.List(siteDir)
 	if err != nil {

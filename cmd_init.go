@@ -55,8 +55,7 @@ func runInit(args []string) {
 	// Create pages/index.md (do not overwrite if it already exists)
 	indexPath := filepath.Join(pagesDir, "index.md")
 	if _, err := os.Stat(indexPath); os.IsNotExist(err) {
-		fm := frontmatter.Generate("Home", time.Now())
-		indexContent := append(fm, []byte("# Home\n\nWelcome to my site.\n")...)
+		indexContent := append(frontmatter.Generate("Home", time.Now()), []byte("# Home\n\nWelcome to my site.\n")...)
 		if err := os.WriteFile(indexPath, indexContent, 0644); err != nil {
 			fmt.Fprintf(os.Stderr, "error creating pages/index.md: %v\n", err)
 			os.Exit(1)
