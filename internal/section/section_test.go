@@ -178,3 +178,63 @@ func TestListPagesNotFound(t *testing.T) {
 		t.Error("expected error listing pages of non-existent section, got nil")
 	}
 }
+
+func TestValidateName(t *testing.T) {
+	invalidNames := []string{
+		"",
+		".",
+		"..",
+		"sub/dir",
+		"sub\\dir",
+		"a/b/c",
+	}
+	for _, name := range invalidNames {
+		if err := validateName(name); err == nil {
+			t.Errorf("validateName(%q): expected error, got nil", name)
+		}
+	}
+
+	validNames := []string{"blog", "my-section", "docs2", "section_name"}
+	for _, name := range validNames {
+		if err := validateName(name); err != nil {
+			t.Errorf("validateName(%q): expected nil, got %v", name, err)
+		}
+	}
+}
+
+func TestCreateRejectsInvalidName(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{"", "..", "a/b"} {
+		if err := Create(dir, name, []byte("x")); err == nil {
+			t.Errorf("Create with name %q should fail, got nil", name)
+		}
+	}
+}
+
+func TestDeleteRejectsInvalidName(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{"", "..", "a/b"} {
+		if err := Delete(dir, name); err == nil {
+			t.Errorf("Delete with name %q should fail, got nil", name)
+		}
+	}
+}
+
+func TestUpdateRejectsInvalidName(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{"", "..", "a/b"} {
+		if err := Update(dir, name, []byte("x")); err == nil {
+			t.Errorf("Update with name %q should fail, got nil", name)
+		}
+	}
+}
+
+func TestListPagesRejectsInvalidName(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{"", "..", "a/b"} {
+		if _, err := ListPages(dir, name); err == nil {
+			t.Errorf("ListPages with name %q should fail, got nil", name)
+		}
+	}
+}
+

@@ -66,9 +66,10 @@ func Build(siteDir, outputDir string) error {
 		return fmt.Errorf("parsing template: %w", err)
 	}
 
-	// rootNavRefs contains navigation entries with root-relative URLs (e.g. "about.html",
-	// "blog/index.html"). These are used as-is for top-level pages, and prefixed with
-	// "../" for pages that live one level deep inside a section directory.
+	// rootNavRefs contains navigation entries with paths relative to the output root
+	// (e.g. "about.html", "blog/index.html"). These are used as-is for top-level pages,
+	// and prefixed with "../" for pages that live one level deep inside a section
+	// directory.
 	rootNavRefs := buildRootNavRefs(pages, sections)
 
 	if err := os.MkdirAll(outputDir, 0755); err != nil {

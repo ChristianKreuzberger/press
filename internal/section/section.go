@@ -19,6 +19,9 @@ var ErrSectionExists = errors.New("section already exists")
 // ErrSectionNotFound is returned when a section with the given name does not exist.
 var ErrSectionNotFound = errors.New("section not found")
 
+// ErrInvalidName is returned when a section name contains illegal characters.
+var ErrInvalidName = errors.New("invalid section name")
+
 // Section represents a group of pages backed by a subdirectory under pages/.
 type Section struct {
 	Name      string // directory name (no slashes)
@@ -30,6 +33,19 @@ type Section struct {
 type Page struct {
 	Name string // file name without the .md extension
 	Path string // absolute path to the .md file
+}
+
+// validateName rejects names that are empty, equal to "." or "..", or that
+// contain a path separator — any of which could cause filesystem operations to
+// escape the pages/ directory.
+func validateName(name string) error {
+	if name == "" || name == "." || name == ".." {
+		return fmt.Errorf("%w: %q", ErrInvalidName, name)
+	}
+	if strings.ContainsAny(name, "/\\") || strings.ContainsRune(name, filepath.Separator) {
+		return fmt.Errorf("%w: %q (must not contain path separators)", ErrInvalidName, name)
+	}
+	return nil
 }
 
 // sectionsBaseDir returns the pages/ directory within siteDir.
@@ -63,8 +79,11 @@ func List(siteDir string) ([]Section, error) {
 		dir := filepath.Join(base, e.Name())
 		indexPath := filepath.Join(dir, "index.md")
 		if _, err := os.Stat(indexPath); err != nil {
-			// Directory without index.md is not a valid section.
-			continue
+			if os.IsNotExist(err) {
+				// Directory without index.md is not a valid section.
+				continue
+			}
+			return nil, err
 		}
 		sections = append(sections, Section{
 			Name:      e.Name(),
@@ -78,6 +97,9 @@ func List(siteDir string) ([]Section, error) {
 // Create creates a new section with the given name and index content.
 // It returns an error if a section with that name already exists.
 func Create(siteDir, name string, content []byte) error {
+	if err := validateName(name); err != nil {
+		return err
+	}
 	dir := sectionDir(siteDir, name)
 	if _, err := os.Stat(dir); err == nil {
 		return fmt.Errorf("%w: %q", ErrSectionExists, name)
@@ -90,6 +112,9 @@ func Create(siteDir, name string, content []byte) error {
 
 // Delete removes the section directory and all its contents.
 func Delete(siteDir, name string) error {
+	if err := validateName(name); err != nil {
+		return err
+	}
 	dir := sectionDir(siteDir, name)
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
 		return fmt.Errorf("%w: %q", ErrSectionNotFound, name)
@@ -99,6 +124,9 @@ func Delete(siteDir, name string) error {
 
 // Update replaces the content of an existing section's index.md.
 func Update(siteDir, name string, content []byte) error {
+	if err := validateName(name); err != nil {
+		return err
+	}
 	dir := sectionDir(siteDir, name)
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
 		return fmt.Errorf("%w: %q", ErrSectionNotFound, name)
@@ -113,6 +141,9 @@ func Update(siteDir, name string, content []byte) error {
 // ListPages returns all pages found inside a section directory, including index.md.
 // Pages are returned in directory order.
 func ListPages(siteDir, sectionName string) ([]Page, error) {
+	if err := validateName(sectionName); err != nil {
+		return nil, err
+	}
 	dir := sectionDir(siteDir, sectionName)
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -134,3 +165,4 @@ func ListPages(siteDir, sectionName string) ([]Page, error) {
 	}
 	return pages, nil
 }
+
