@@ -31,6 +31,21 @@ func runInit(args []string) {
 		os.Exit(1)
 	}
 
+	// Create pages/index.md (do not overwrite if it already exists)
+	indexPath := filepath.Join(pagesDir, "index.md")
+	if _, err := os.Stat(indexPath); os.IsNotExist(err) {
+		if err := os.WriteFile(indexPath, []byte("# Home\n\nWelcome to my site.\n"), 0644); err != nil {
+			fmt.Fprintf(os.Stderr, "error creating pages/index.md: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println("created pages/index.md")
+	} else if err != nil {
+		fmt.Fprintf(os.Stderr, "error checking pages/index.md: %v\n", err)
+		os.Exit(1)
+	} else {
+		fmt.Println("pages/index.md already exists, skipping")
+	}
+
 	// Create template.html (do not overwrite if it already exists)
 	tmplPath := filepath.Join(siteDir, "template.html")
 	if _, err := os.Stat(tmplPath); os.IsNotExist(err) {

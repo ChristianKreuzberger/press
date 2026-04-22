@@ -8,32 +8,6 @@ import (
 	"github.com/ChristianKreuzberger/press/internal/page"
 )
 
-func runPage(args []string) {
-	if len(args) == 0 {
-		fmt.Fprintf(os.Stderr, "Usage: press page <command>\n\n")
-		fmt.Fprintf(os.Stderr, "Commands:\n")
-		fmt.Fprintf(os.Stderr, "  list              list all pages\n")
-		fmt.Fprintf(os.Stderr, "  create <name>     create a new page\n")
-		fmt.Fprintf(os.Stderr, "  delete <name>     delete a page\n")
-		fmt.Fprintf(os.Stderr, "  update <name>     update a page\n")
-		os.Exit(1)
-	}
-
-	switch args[0] {
-	case "list":
-		runPageList(args[1:])
-	case "create":
-		runPageCreate(args[1:])
-	case "delete":
-		runPageDelete(args[1:])
-	case "update":
-		runPageUpdate(args[1:])
-	default:
-		fmt.Fprintf(os.Stderr, "unknown page command: %s\n", args[0])
-		os.Exit(1)
-	}
-}
-
 func runPageList(_ []string) {
 	siteDir, _ := os.Getwd()
 	pages, err := page.List(siteDir)
@@ -53,12 +27,12 @@ func runPageList(_ []string) {
 func runPageCreate(args []string) {
 	// Name is the first positional argument; remaining args may contain flags.
 	if len(args) == 0 {
-		fmt.Fprintf(os.Stderr, "Usage: press page create <name> [--file <file.md>]\n")
+		fmt.Fprintf(os.Stderr, "Usage: press create page <name> [--file <file.md>]\n")
 		os.Exit(1)
 	}
 	name := args[0]
 
-	fs := flag.NewFlagSet("page create", flag.ExitOnError)
+	fs := flag.NewFlagSet("create page", flag.ExitOnError)
 	fileFlag := fs.String("file", "", "markdown file to use as page content")
 	_ = fs.Parse(args[1:])
 
@@ -84,7 +58,7 @@ func runPageCreate(args []string) {
 
 func runPageDelete(args []string) {
 	if len(args) == 0 {
-		fmt.Fprintf(os.Stderr, "Usage: press page delete <name>\n")
+		fmt.Fprintf(os.Stderr, "Usage: press delete page <name>\n")
 		os.Exit(1)
 	}
 	name := args[0]
@@ -99,17 +73,17 @@ func runPageDelete(args []string) {
 func runPageUpdate(args []string) {
 	// Name is the first positional argument; remaining args may contain flags.
 	if len(args) == 0 {
-		fmt.Fprintf(os.Stderr, "Usage: press page update <name> --file <file.md>\n")
+		fmt.Fprintf(os.Stderr, "Usage: press update page <name> --file <file.md>\n")
 		os.Exit(1)
 	}
 	name := args[0]
 
-	fs := flag.NewFlagSet("page update", flag.ExitOnError)
+	fs := flag.NewFlagSet("update page", flag.ExitOnError)
 	fileFlag := fs.String("file", "", "markdown file to use as updated page content")
 	_ = fs.Parse(args[1:])
 
 	if *fileFlag == "" {
-		fmt.Fprintf(os.Stderr, "press page update requires --file\n")
+		fmt.Fprintf(os.Stderr, "press update page requires --file\n")
 		os.Exit(1)
 	}
 

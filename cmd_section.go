@@ -8,32 +8,6 @@ import (
 	"github.com/ChristianKreuzberger/press/internal/section"
 )
 
-func runSection(args []string) {
-	if len(args) == 0 {
-		fmt.Fprintf(os.Stderr, "Usage: press section <command>\n\n")
-		fmt.Fprintf(os.Stderr, "Commands:\n")
-		fmt.Fprintf(os.Stderr, "  list                    list all sections\n")
-		fmt.Fprintf(os.Stderr, "  create <name>           create a new section\n")
-		fmt.Fprintf(os.Stderr, "  delete <name>           delete a section and all its pages\n")
-		fmt.Fprintf(os.Stderr, "  update <name>           update a section's index page\n")
-		os.Exit(1)
-	}
-
-	switch args[0] {
-	case "list":
-		runSectionList(args[1:])
-	case "create":
-		runSectionCreate(args[1:])
-	case "delete":
-		runSectionDelete(args[1:])
-	case "update":
-		runSectionUpdate(args[1:])
-	default:
-		fmt.Fprintf(os.Stderr, "unknown section command: %s\n", args[0])
-		os.Exit(1)
-	}
-}
-
 func runSectionList(_ []string) {
 	siteDir, _ := os.Getwd()
 	sections, err := section.List(siteDir)
@@ -52,12 +26,12 @@ func runSectionList(_ []string) {
 
 func runSectionCreate(args []string) {
 	if len(args) == 0 {
-		fmt.Fprintf(os.Stderr, "Usage: press section create <name> [--file <file.md>]\n")
+		fmt.Fprintf(os.Stderr, "Usage: press create section <name> [--file <file.md>]\n")
 		os.Exit(1)
 	}
 	name := args[0]
 
-	fs := flag.NewFlagSet("section create", flag.ExitOnError)
+	fs := flag.NewFlagSet("create section", flag.ExitOnError)
 	fileFlag := fs.String("file", "", "markdown file to use as the section index content")
 	_ = fs.Parse(args[1:])
 
@@ -83,7 +57,7 @@ func runSectionCreate(args []string) {
 
 func runSectionDelete(args []string) {
 	if len(args) == 0 {
-		fmt.Fprintf(os.Stderr, "Usage: press section delete <name>\n")
+		fmt.Fprintf(os.Stderr, "Usage: press delete section <name>\n")
 		os.Exit(1)
 	}
 	name := args[0]
@@ -97,17 +71,17 @@ func runSectionDelete(args []string) {
 
 func runSectionUpdate(args []string) {
 	if len(args) == 0 {
-		fmt.Fprintf(os.Stderr, "Usage: press section update <name> --file <file.md>\n")
+		fmt.Fprintf(os.Stderr, "Usage: press update section <name> --file <file.md>\n")
 		os.Exit(1)
 	}
 	name := args[0]
 
-	fs := flag.NewFlagSet("section update", flag.ExitOnError)
+	fs := flag.NewFlagSet("update section", flag.ExitOnError)
 	fileFlag := fs.String("file", "", "markdown file to use as updated section index content")
 	_ = fs.Parse(args[1:])
 
 	if *fileFlag == "" {
-		fmt.Fprintf(os.Stderr, "press section update requires --file\n")
+		fmt.Fprintf(os.Stderr, "press update section requires --file\n")
 		os.Exit(1)
 	}
 

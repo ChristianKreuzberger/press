@@ -48,7 +48,7 @@ go install github.com/ChristianKreuzberger/press@latest
 press init
 
 # 2. Create your first page
-press page create about
+press create page about
 
 # 3. Edit pages/about.md with your favourite editor, then build
 press build
@@ -61,14 +61,14 @@ press build
 | Command | Description |
 |---------|-------------|
 | `press init [dir]` | Scaffold a new site (`template.html` + `pages/`) |
-| `press page list` | List all pages |
-| `press page create <name> [--file f.md]` | Create a new page |
-| `press page update <name> --file f.md` | Replace a page's content |
-| `press page delete <name>` | Delete a page |
-| `press section list` | List all sections |
-| `press section create <name> [--file f.md]` | Create a new section (folder + `index.md`) |
-| `press section update <name> --file f.md` | Replace a section's index content |
-| `press section delete <name>` | Delete a section and all its pages |
+| `press list page` | List all pages |
+| `press create page <name> [--file f.md]` | Create a new page |
+| `press update page <name> --file f.md` | Replace a page's content |
+| `press delete page <name>` | Delete a page |
+| `press list section` | List all sections |
+| `press create section <name> [--file f.md]` | Create a new section (folder + `index.md`) |
+| `press update section <name> --file f.md` | Replace a section's index content |
+| `press delete section <name>` | Delete a section and all its pages |
 | `press build [-output dir]` | Build the site into `dist/` (default) |
 | `press --version` | Print the installed version |
 

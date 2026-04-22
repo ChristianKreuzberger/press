@@ -72,40 +72,39 @@ func TestE2E(t *testing.T) {
 	if _, err := os.Stat(pagesDir); err != nil {
 		t.Fatal("press init should create pages/")
 	}
+	if _, err := os.Stat(filepath.Join(pagesDir, "index.md")); err != nil {
+		t.Fatal("press init should create pages/index.md")
+	}
 
-	// Running init again should not fail and should skip template.html
+	// Running init again should not fail and should skip existing files
 	out = run(t, siteDir, "init")
 	if !strings.Contains(out, "already exists") {
-		t.Errorf("second init should say template.html already exists, got: %s", out)
+		t.Errorf("second init should say files already exist, got: %s", out)
 	}
 
-	// --- press page list (empty) ---
-	out = run(t, siteDir, "page", "list")
-	if !strings.Contains(out, "no pages") {
-		t.Errorf("empty page list should say 'no pages', got: %s", out)
+	// --- press list page (has index from init) ---
+	out = run(t, siteDir, "list", "page")
+	if !strings.Contains(out, "index") {
+		t.Errorf("page list should contain 'index' after init, got: %s", out)
 	}
 
-	// --- press page create (from file) ---
+	// --- press update page index (from file) ---
 	indexMD := filepath.Join(t.TempDir(), "index.md")
 	writeFile(t, indexMD, "# Home\n\nWelcome to my site!\n")
 
-	run(t, siteDir, "page", "create", "index", "--file", indexMD)
+	run(t, siteDir, "update", "page", "index", "--file", indexMD)
 
-	if _, err := os.Stat(filepath.Join(pagesDir, "index.md")); err != nil {
-		t.Fatal("page create should create pages/index.md")
-	}
-
-	// --- press page create (empty, no file flag) ---
-	run(t, siteDir, "page", "create", "about")
+	// --- press create page (empty, no file flag) ---
+	run(t, siteDir, "create", "page", "about")
 	if _, err := os.Stat(filepath.Join(pagesDir, "about.md")); err != nil {
 		t.Fatal("page create without --file should still create pages/about.md")
 	}
 
 	// --- duplicate create should fail ---
-	runExpectError(t, siteDir, "page", "create", "index")
+	runExpectError(t, siteDir, "create", "page", "index")
 
-	// --- press page list ---
-	out = run(t, siteDir, "page", "list")
+	// --- press list page ---
+	out = run(t, siteDir, "list", "page")
 	if !strings.Contains(out, "index") {
 		t.Errorf("page list should contain 'index', got: %s", out)
 	}
@@ -146,10 +145,10 @@ func TestE2E(t *testing.T) {
 		t.Errorf("dist/index.html should link to index.html, got:\n%s", content)
 	}
 
-	// --- press page update ---
+	// --- press update page ---
 	updatedMD := filepath.Join(t.TempDir(), "updated.md")
 	writeFile(t, updatedMD, "# Home Updated\n\nThis content was updated.\n")
-	run(t, siteDir, "page", "update", "index", "--file", updatedMD)
+	run(t, siteDir, "update", "page", "index", "--file", updatedMD)
 
 	// Rebuild and verify updated content
 	run(t, siteDir, "build")
@@ -161,15 +160,15 @@ func TestE2E(t *testing.T) {
 		t.Errorf("dist/index.html should contain updated body, got:\n%s", content)
 	}
 
-	// --- press page delete ---
-	run(t, siteDir, "page", "delete", "about")
+	// --- press delete page ---
+	run(t, siteDir, "delete", "page", "about")
 
 	if _, err := os.Stat(filepath.Join(pagesDir, "about.md")); !os.IsNotExist(err) {
 		t.Fatal("pages/about.md should have been deleted")
 	}
 
 	// Verify list no longer contains about
-	out = run(t, siteDir, "page", "list")
+	out = run(t, siteDir, "list", "page")
 	if strings.Contains(out, "about") {
 		t.Errorf("page list should not contain 'about' after delete, got: %s", out)
 	}
@@ -178,10 +177,10 @@ func TestE2E(t *testing.T) {
 	}
 
 	// --- delete non-existent page should fail ---
-	runExpectError(t, siteDir, "page", "delete", "nonexistent")
+	runExpectError(t, siteDir, "delete", "page", "nonexistent")
 
 	// --- update non-existent page should fail ---
-	runExpectError(t, siteDir, "page", "update", "nonexistent", "--file", updatedMD)
+	runExpectError(t, siteDir, "update", "page", "nonexistent", "--file", updatedMD)
 
 	// --- press build --output ---
 	customOut := filepath.Join(siteDir, "public")
@@ -218,23 +217,20 @@ func readFile(t *testing.T, path string) string {
 func TestE2ESection(t *testing.T) {
 	siteDir := t.TempDir()
 
-	// Initialise the site first.
+	// Initialise the site first (also creates pages/index.md).
 	run(t, siteDir, "init")
 
-	// Create a top-level page so navigation has something to link to.
-	run(t, siteDir, "page", "create", "index")
-
-	// --- press section list (empty) ---
-	out := run(t, siteDir, "section", "list")
+	// --- press list section (empty) ---
+	out := run(t, siteDir, "list", "section")
 	if !strings.Contains(out, "no sections") {
 		t.Errorf("empty section list should say 'no sections', got: %s", out)
 	}
 
-	// --- press section create (from file) ---
+	// --- press create section (from file) ---
 	blogIndexMD := filepath.Join(t.TempDir(), "blog-index.md")
 	writeFile(t, blogIndexMD, "# Blog\n\nAll blog posts.\n")
 
-	run(t, siteDir, "section", "create", "blog", "--file", blogIndexMD)
+	run(t, siteDir, "create", "section", "blog", "--file", blogIndexMD)
 
 	blogDir := filepath.Join(siteDir, "pages", "blog")
 	if _, err := os.Stat(blogDir); err != nil {
@@ -244,17 +240,17 @@ func TestE2ESection(t *testing.T) {
 		t.Fatal("section create should create pages/blog/index.md")
 	}
 
-	// --- press section create (empty, no file flag) ---
-	run(t, siteDir, "section", "create", "docs")
+	// --- press create section (empty, no file flag) ---
+	run(t, siteDir, "create", "section", "docs")
 	if _, err := os.Stat(filepath.Join(siteDir, "pages", "docs", "index.md")); err != nil {
 		t.Fatal("section create without --file should still create pages/docs/index.md")
 	}
 
 	// --- duplicate section create should fail ---
-	runExpectError(t, siteDir, "section", "create", "blog")
+	runExpectError(t, siteDir, "create", "section", "blog")
 
-	// --- press section list ---
-	out = run(t, siteDir, "section", "list")
+	// --- press list section ---
+	out = run(t, siteDir, "list", "section")
 	if !strings.Contains(out, "blog") {
 		t.Errorf("section list should contain 'blog', got: %s", out)
 	}
@@ -311,10 +307,10 @@ func TestE2ESection(t *testing.T) {
 		t.Errorf("dist/blog/first-post.html should contain post body, got:\n%s", postContent)
 	}
 
-	// --- press section update ---
+	// --- press update section ---
 	updatedBlogMD := filepath.Join(t.TempDir(), "updated-blog.md")
 	writeFile(t, updatedBlogMD, "# Blog Updated\n\nUpdated description.\n")
-	run(t, siteDir, "section", "update", "blog", "--file", updatedBlogMD)
+	run(t, siteDir, "update", "section", "blog", "--file", updatedBlogMD)
 
 	// Rebuild and verify updated section index content.
 	run(t, siteDir, "build")
@@ -326,15 +322,15 @@ func TestE2ESection(t *testing.T) {
 		t.Errorf("dist/blog/index.html should contain updated body, got:\n%s", content)
 	}
 
-	// --- press section delete ---
-	run(t, siteDir, "section", "delete", "docs")
+	// --- press delete section ---
+	run(t, siteDir, "delete", "section", "docs")
 
 	if _, err := os.Stat(filepath.Join(siteDir, "pages", "docs")); !os.IsNotExist(err) {
 		t.Fatal("pages/docs/ should have been deleted")
 	}
 
 	// Verify list no longer contains docs.
-	out = run(t, siteDir, "section", "list")
+	out = run(t, siteDir, "list", "section")
 	if strings.Contains(out, "docs") {
 		t.Errorf("section list should not contain 'docs' after delete, got: %s", out)
 	}
@@ -343,11 +339,11 @@ func TestE2ESection(t *testing.T) {
 	}
 
 	// --- delete non-existent section should fail ---
-	runExpectError(t, siteDir, "section", "delete", "nonexistent")
+	runExpectError(t, siteDir, "delete", "section", "nonexistent")
 
 	// --- update non-existent section should fail ---
-	runExpectError(t, siteDir, "section", "update", "nonexistent", "--file", updatedBlogMD)
+	runExpectError(t, siteDir, "update", "section", "nonexistent", "--file", updatedBlogMD)
 
 	// --- section update without --file should fail ---
-	runExpectError(t, siteDir, "section", "update", "blog")
+	runExpectError(t, siteDir, "update", "section", "blog")
 }
