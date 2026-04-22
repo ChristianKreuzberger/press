@@ -46,7 +46,7 @@ func runSectionCreate(args []string) {
 			os.Exit(1)
 		}
 	} else {
-		fm := frontmatter.Generate(name, time.Now())
+		fm := frontmatter.GenerateSection(name, time.Now())
 		content = append(fm, []byte("# "+name+"\n\n")...)
 	}
 

@@ -6,6 +6,9 @@ import (
 	"html/template"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
+	"time"
 
 	"github.com/ChristianKreuzberger/press/internal/frontmatter"
 	"github.com/ChristianKreuzberger/press/internal/markdown"
@@ -245,6 +248,15 @@ const DefaultTemplate = `<!DOCTYPE html>
     </header>
     <main>
         {{.Content}}
+        {{if .TableOfContents}}
+        <section class="toc">
+            <h2>Contents</h2>
+            <ul>
+                {{range .TableOfContents}}<li><a href="{{.URL}}">{{.Title}}</a></li>
+                {{end}}
+            </ul>
+        </section>
+        {{end}}
     </main>
     <footer>
         built with <a href="https://github.com/ChristianKreuzberger/press" style="color:var(--accent2);border:none;">press</a>
@@ -258,11 +270,21 @@ type PageRef struct {
 	URL   string
 }
 
+// TOCEntry represents a single entry in a section's table of contents.
+type TOCEntry struct {
+	Title     string
+	URL       string
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	Weight    int
+}
+
 // TemplateData is passed to the HTML template for each page.
 type TemplateData struct {
-	Title   string
-	Content template.HTML
-	Pages   []PageRef
+	Title           string
+	Content         template.HTML
+	Pages           []PageRef
+	TableOfContents []TOCEntry
 }
 
 // Build converts all pages in siteDir to HTML files in outputDir.
@@ -302,7 +324,7 @@ func Build(siteDir, outputDir string) error {
 
 	// Build top-level pages.
 	for _, p := range pages {
-		if err := buildPageFromPath(p.Name, p.Path, filepath.Join(outputDir, p.Name+".html"), rootNavRefs, tmpl); err != nil {
+		if err := buildPageFromPath(p.Name, p.Path, filepath.Join(outputDir, p.Name+".html"), rootNavRefs, nil, tmpl); err != nil {
 			return err
 		}
 	}
@@ -317,11 +339,18 @@ func Build(siteDir, outputDir string) error {
 		if err := os.MkdirAll(sectionOutDir, 0755); err != nil {
 			return fmt.Errorf("creating section output directory %s: %w", sectionOutDir, err)
 		}
+		// Build the TOC for this section's index page.
+		indexContent, _ := os.ReadFile(s.IndexPath)
+		toc := buildSectionTOC(sectionPages, indexContent)
 		// Section pages are one level deep, so prefix top-level nav URLs with "../".
 		sectionNavRefs := prefixNavRefs(rootNavRefs, "../")
 		for _, sp := range sectionPages {
 			outPath := filepath.Join(sectionOutDir, sp.Name+".html")
-			if err := buildPageFromPath(sp.Name, sp.Path, outPath, sectionNavRefs, tmpl); err != nil {
+			var pageTOC []TOCEntry
+			if sp.Name == "index" {
+				pageTOC = toc
+			}
+			if err := buildPageFromPath(sp.Name, sp.Path, outPath, sectionNavRefs, pageTOC, tmpl); err != nil {
 				return err
 			}
 		}
@@ -329,21 +358,55 @@ func Build(siteDir, outputDir string) error {
 	return nil
 }
 
+// weightedRef pairs a PageRef with its navigation weight for sorting.
+type weightedRef struct {
+	ref    PageRef
+	weight int
+}
+
 // buildRootNavRefs assembles the navigation entry list using root-relative URLs.
 // Top-level pages link to "<name>.html"; sections link to "<section>/index.html".
+// Entries are sorted by ascending weight; entries with weight=0 (unset) appear last
+// in their original filesystem order (stable sort).
 func buildRootNavRefs(pages []page.Page, sections []section.Section) []PageRef {
-	refs := make([]PageRef, 0, len(pages)+len(sections))
+	weighted := make([]weightedRef, 0, len(pages)+len(sections))
 	for _, p := range pages {
-		refs = append(refs, PageRef{
-			Title: resolveTitleFromPath(p.Name, p.Path),
-			URL:   p.Name + ".html",
+		content, _ := os.ReadFile(p.Path)
+		weighted = append(weighted, weightedRef{
+			ref: PageRef{
+				Title: resolveTitleFromPath(p.Name, p.Path),
+				URL:   p.Name + ".html",
+			},
+			weight: frontmatter.ParseWeight(content),
 		})
 	}
 	for _, s := range sections {
-		refs = append(refs, PageRef{
-			Title: resolveTitleFromPath(s.Name, s.IndexPath),
-			URL:   s.Name + "/index.html",
+		content, _ := os.ReadFile(s.IndexPath)
+		weighted = append(weighted, weightedRef{
+			ref: PageRef{
+				Title: resolveTitleFromPath(s.Name, s.IndexPath),
+				URL:   s.Name + "/index.html",
+			},
+			weight: frontmatter.ParseWeight(content),
 		})
+	}
+	sort.SliceStable(weighted, func(i, j int) bool {
+		wi, wj := weighted[i].weight, weighted[j].weight
+		// weight=0 means unset; keep those after all weighted items.
+		if wi == 0 && wj == 0 {
+			return false
+		}
+		if wi == 0 {
+			return false
+		}
+		if wj == 0 {
+			return true
+		}
+		return wi < wj
+	})
+	refs := make([]PageRef, len(weighted))
+	for i, w := range weighted {
+		refs[i] = w.ref
 	}
 	return refs
 }
@@ -357,7 +420,83 @@ func prefixNavRefs(refs []PageRef, prefix string) []PageRef {
 	return out
 }
 
-func buildPageFromPath(name, mdPath, outPath string, pageRefs []PageRef, tmpl *template.Template) error {
+// buildSectionTOC collects TOC entries for all non-index pages in the section,
+// sorted according to the toc_sort and toc_order fields in indexContent.
+func buildSectionTOC(pages []section.Page, indexContent []byte) []TOCEntry {
+	tocSort := frontmatter.ParseStringField(indexContent, "toc_sort")
+	tocOrder := frontmatter.ParseStringField(indexContent, "toc_order")
+	if tocSort == "" {
+		tocSort = "weight"
+	}
+	if tocOrder == "" {
+		tocOrder = "asc"
+	}
+
+	var entries []TOCEntry
+	for _, p := range pages {
+		if p.Name == "index" {
+			continue
+		}
+		content, _ := os.ReadFile(p.Path)
+		body := frontmatter.Strip(string(content))
+		title := markdown.ExtractTitle(body)
+		if title == "" {
+			title = p.Name
+		}
+		entries = append(entries, TOCEntry{
+			Title:     title,
+			URL:       p.Name + ".html",
+			CreatedAt: frontmatter.ParseTimeField(content, "created_at"),
+			UpdatedAt: frontmatter.ParseTimeField(content, "updated_at"),
+			Weight:    frontmatter.ParseWeight(content),
+		})
+	}
+
+	sortTOC(entries, tocSort, tocOrder)
+	return entries
+}
+
+// sortTOC sorts entries in-place by the given field and order.
+// For weight sort: entries with weight=0 (unset) always appear last regardless of order.
+func sortTOC(entries []TOCEntry, by, order string) {
+	sort.SliceStable(entries, func(i, j int) bool {
+		switch by {
+		case "title":
+			ai, aj := strings.ToLower(entries[i].Title), strings.ToLower(entries[j].Title)
+			if order == "desc" {
+				return aj < ai
+			}
+			return ai < aj
+		case "created_at":
+			if order == "desc" {
+				return entries[j].CreatedAt.Before(entries[i].CreatedAt)
+			}
+			return entries[i].CreatedAt.Before(entries[j].CreatedAt)
+		case "updated_at":
+			if order == "desc" {
+				return entries[j].UpdatedAt.Before(entries[i].UpdatedAt)
+			}
+			return entries[i].UpdatedAt.Before(entries[j].UpdatedAt)
+		default: // "weight"
+			wi, wj := entries[i].Weight, entries[j].Weight
+			if wi == 0 && wj == 0 {
+				return false
+			}
+			if wi == 0 {
+				return false // unset always goes last
+			}
+			if wj == 0 {
+				return true // unset always goes last
+			}
+			if order == "desc" {
+				return wj < wi
+			}
+			return wi < wj
+		}
+	})
+}
+
+func buildPageFromPath(name, mdPath, outPath string, pageRefs []PageRef, toc []TOCEntry, tmpl *template.Template) error {
 	mdContent, err := os.ReadFile(mdPath)
 	if err != nil {
 		return fmt.Errorf("reading page %s: %w", name, err)
@@ -371,9 +510,10 @@ func buildPageFromPath(name, mdPath, outPath string, pageRefs []PageRef, tmpl *t
 	}
 
 	data := TemplateData{
-		Title:   title,
-		Content: template.HTML(htmlContent), //nolint:gosec // markdown is trusted content from the user's own files
-		Pages:   pageRefs,
+		Title:           title,
+		Content:         template.HTML(htmlContent), //nolint:gosec // markdown is trusted content from the user's own files
+		Pages:           pageRefs,
+		TableOfContents: toc,
 	}
 
 	f, err := os.Create(outPath)

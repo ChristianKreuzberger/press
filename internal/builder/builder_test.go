@@ -251,3 +251,373 @@ func mustRead(t *testing.T, path string) []byte {
 	}
 	return b
 }
+
+func TestBuildNavSortedByWeight(t *testing.T) {
+	siteDir := t.TempDir()
+	outDir := filepath.Join(siteDir, "dist")
+
+	// Create pages with different weights; filesystem order (alpha) is: first, last, second
+	// but nav order should be: weight=1 (first), weight=2 (second), weight=0/unset (last).
+	if err := page.Create(siteDir, "first", []byte("---\ntitle: \"First\"\nweight: 1\n---\n# First\n")); err != nil {
+		t.Fatal(err)
+	}
+	if err := page.Create(siteDir, "second", []byte("---\ntitle: \"Second\"\nweight: 2\n---\n# Second\n")); err != nil {
+		t.Fatal(err)
+	}
+	if err := page.Create(siteDir, "last", []byte("---\ntitle: \"Last\"\nweight: 0\n---\n# Last\n")); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Build(siteDir, outDir); err != nil {
+		t.Fatalf("Build failed: %v", err)
+	}
+
+	content := string(mustRead(t, filepath.Join(outDir, "first.html")))
+
+	firstPos := strings.Index(content, "first.html")
+	secondPos := strings.Index(content, "second.html")
+	lastPos := strings.Index(content, "last.html")
+
+	if firstPos == -1 || secondPos == -1 || lastPos == -1 {
+		t.Fatalf("expected all pages in nav, got:\n%s", content)
+	}
+	if firstPos > secondPos {
+		t.Errorf("expected 'first' (weight=1) before 'second' (weight=2) in nav")
+	}
+	if secondPos > lastPos {
+		t.Errorf("expected 'second' (weight=2) before 'last' (weight=0/unset) in nav")
+	}
+}
+
+func TestBuildNavWeightWithSection(t *testing.T) {
+	siteDir := t.TempDir()
+	outDir := filepath.Join(siteDir, "dist")
+
+	// Section with weight=1 should appear before an unweighted top-level page.
+	if err := section.Create(siteDir, "blog", []byte("---\ntitle: \"Blog\"\nweight: 1\n---\n# Blog\n")); err != nil {
+		t.Fatal(err)
+	}
+	if err := page.Create(siteDir, "about", []byte("# About\n")); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Build(siteDir, outDir); err != nil {
+		t.Fatalf("Build failed: %v", err)
+	}
+
+	content := string(mustRead(t, filepath.Join(outDir, "about.html")))
+
+	blogPos := strings.Index(content, "blog/index.html")
+	aboutPos := strings.Index(content, "about.html")
+
+	if blogPos == -1 || aboutPos == -1 {
+		t.Fatalf("expected both nav entries, got:\n%s", content)
+	}
+	if blogPos > aboutPos {
+		t.Errorf("expected 'blog' (weight=1) before 'about' (no weight) in nav")
+	}
+}
+
+func TestBuildSectionTOCByTitleAsc(t *testing.T) {
+	siteDir := t.TempDir()
+	outDir := filepath.Join(siteDir, "dist")
+
+	indexContent := "---\ntitle: \"Blog\"\ntoc_sort: \"title\"\ntoc_order: \"asc\"\n---\n# Blog\n"
+	if err := section.Create(siteDir, "blog", []byte(indexContent)); err != nil {
+		t.Fatal(err)
+	}
+	blogDir := filepath.Join(siteDir, "pages", "blog")
+	if err := os.WriteFile(filepath.Join(blogDir, "zebra.md"), []byte("# Zebra Post\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(blogDir, "apple.md"), []byte("# Apple Post\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Build(siteDir, outDir); err != nil {
+		t.Fatalf("Build failed: %v", err)
+	}
+
+	content := string(mustRead(t, filepath.Join(outDir, "blog", "index.html")))
+
+	// TOC section must be present.
+	if !strings.Contains(content, "class=\"toc\"") {
+		t.Fatalf("expected TOC section in section index, got:\n%s", content)
+	}
+
+	applePos := strings.Index(content, "apple.html")
+	zebraPos := strings.Index(content, "zebra.html")
+	if applePos == -1 || zebraPos == -1 {
+		t.Fatalf("expected both TOC entries, got:\n%s", content)
+	}
+	if applePos > zebraPos {
+		t.Errorf("expected apple.html before zebra.html in TOC (title asc)")
+	}
+}
+
+func TestBuildSectionTOCByTitleDesc(t *testing.T) {
+	siteDir := t.TempDir()
+	outDir := filepath.Join(siteDir, "dist")
+
+	indexContent := "---\ntitle: \"Blog\"\ntoc_sort: \"title\"\ntoc_order: \"desc\"\n---\n# Blog\n"
+	if err := section.Create(siteDir, "blog", []byte(indexContent)); err != nil {
+		t.Fatal(err)
+	}
+	blogDir := filepath.Join(siteDir, "pages", "blog")
+	if err := os.WriteFile(filepath.Join(blogDir, "alpha.md"), []byte("# Alpha\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(blogDir, "zeta.md"), []byte("# Zeta\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Build(siteDir, outDir); err != nil {
+		t.Fatalf("Build failed: %v", err)
+	}
+
+	content := string(mustRead(t, filepath.Join(outDir, "blog", "index.html")))
+	alphaPos := strings.Index(content, "alpha.html")
+	zetaPos := strings.Index(content, "zeta.html")
+
+	if alphaPos == -1 || zetaPos == -1 {
+		t.Fatalf("expected both TOC entries, got:\n%s", content)
+	}
+	if zetaPos > alphaPos {
+		t.Errorf("expected zeta.html before alpha.html in TOC (title desc)")
+	}
+}
+
+func TestBuildSectionTOCByCreatedAtAsc(t *testing.T) {
+	siteDir := t.TempDir()
+	outDir := filepath.Join(siteDir, "dist")
+
+	indexContent := "---\ntitle: \"Blog\"\ntoc_sort: \"created_at\"\ntoc_order: \"asc\"\n---\n# Blog\n"
+	if err := section.Create(siteDir, "blog", []byte(indexContent)); err != nil {
+		t.Fatal(err)
+	}
+	blogDir := filepath.Join(siteDir, "pages", "blog")
+	older := "---\ntitle: \"Older\"\ncreated_at: \"2024-01-01T00:00:00Z\"\n---\n# Older\n"
+	newer := "---\ntitle: \"Newer\"\ncreated_at: \"2025-06-01T00:00:00Z\"\n---\n# Newer\n"
+	if err := os.WriteFile(filepath.Join(blogDir, "older-post.md"), []byte(older), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(blogDir, "newer-post.md"), []byte(newer), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Build(siteDir, outDir); err != nil {
+		t.Fatalf("Build failed: %v", err)
+	}
+
+	content := string(mustRead(t, filepath.Join(outDir, "blog", "index.html")))
+	olderPos := strings.Index(content, "older-post.html")
+	newerPos := strings.Index(content, "newer-post.html")
+
+	if olderPos == -1 || newerPos == -1 {
+		t.Fatalf("expected both TOC entries, got:\n%s", content)
+	}
+	if olderPos > newerPos {
+		t.Errorf("expected older-post before newer-post in TOC (created_at asc)")
+	}
+}
+
+func TestBuildSectionTOCByCreatedAtDesc(t *testing.T) {
+	siteDir := t.TempDir()
+	outDir := filepath.Join(siteDir, "dist")
+
+	indexContent := "---\ntitle: \"Blog\"\ntoc_sort: \"created_at\"\ntoc_order: \"desc\"\n---\n# Blog\n"
+	if err := section.Create(siteDir, "blog", []byte(indexContent)); err != nil {
+		t.Fatal(err)
+	}
+	blogDir := filepath.Join(siteDir, "pages", "blog")
+	older := "---\ntitle: \"Older\"\ncreated_at: \"2024-01-01T00:00:00Z\"\n---\n# Older\n"
+	newer := "---\ntitle: \"Newer\"\ncreated_at: \"2025-06-01T00:00:00Z\"\n---\n# Newer\n"
+	if err := os.WriteFile(filepath.Join(blogDir, "older-post.md"), []byte(older), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(blogDir, "newer-post.md"), []byte(newer), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Build(siteDir, outDir); err != nil {
+		t.Fatalf("Build failed: %v", err)
+	}
+
+	content := string(mustRead(t, filepath.Join(outDir, "blog", "index.html")))
+	olderPos := strings.Index(content, "older-post.html")
+	newerPos := strings.Index(content, "newer-post.html")
+
+	if olderPos == -1 || newerPos == -1 {
+		t.Fatalf("expected both TOC entries, got:\n%s", content)
+	}
+	if newerPos > olderPos {
+		t.Errorf("expected newer-post before older-post in TOC (created_at desc)")
+	}
+}
+
+func TestBuildSectionTOCByUpdatedAtDesc(t *testing.T) {
+	siteDir := t.TempDir()
+	outDir := filepath.Join(siteDir, "dist")
+
+	indexContent := "---\ntitle: \"Blog\"\ntoc_sort: \"updated_at\"\ntoc_order: \"desc\"\n---\n# Blog\n"
+	if err := section.Create(siteDir, "blog", []byte(indexContent)); err != nil {
+		t.Fatal(err)
+	}
+	blogDir := filepath.Join(siteDir, "pages", "blog")
+	early := "---\ntitle: \"Early Update\"\nupdated_at: \"2023-03-01T00:00:00Z\"\n---\n# Early Update\n"
+	late := "---\ntitle: \"Late Update\"\nupdated_at: \"2026-02-01T00:00:00Z\"\n---\n# Late Update\n"
+	if err := os.WriteFile(filepath.Join(blogDir, "early.md"), []byte(early), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(blogDir, "late.md"), []byte(late), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Build(siteDir, outDir); err != nil {
+		t.Fatalf("Build failed: %v", err)
+	}
+
+	content := string(mustRead(t, filepath.Join(outDir, "blog", "index.html")))
+	earlyPos := strings.Index(content, "early.html")
+	latePos := strings.Index(content, "late.html")
+
+	if earlyPos == -1 || latePos == -1 {
+		t.Fatalf("expected both TOC entries, got:\n%s", content)
+	}
+	if latePos > earlyPos {
+		t.Errorf("expected late.html before early.html in TOC (updated_at desc)")
+	}
+}
+
+func TestBuildSectionTOCByWeight(t *testing.T) {
+	siteDir := t.TempDir()
+	outDir := filepath.Join(siteDir, "dist")
+
+	// toc_sort defaults to "weight" when unspecified; use explicit here.
+	indexContent := "---\ntitle: \"Blog\"\ntoc_sort: \"weight\"\ntoc_order: \"asc\"\n---\n# Blog\n"
+	if err := section.Create(siteDir, "blog", []byte(indexContent)); err != nil {
+		t.Fatal(err)
+	}
+	blogDir := filepath.Join(siteDir, "pages", "blog")
+	first := "---\ntitle: \"First\"\nweight: 1\n---\n# First\n"
+	second := "---\ntitle: \"Second\"\nweight: 2\n---\n# Second\n"
+	unweighted := "---\ntitle: \"Unweighted\"\nweight: 0\n---\n# Unweighted\n"
+	if err := os.WriteFile(filepath.Join(blogDir, "first.md"), []byte(first), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(blogDir, "second.md"), []byte(second), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(blogDir, "unweighted.md"), []byte(unweighted), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Build(siteDir, outDir); err != nil {
+		t.Fatalf("Build failed: %v", err)
+	}
+
+	content := string(mustRead(t, filepath.Join(outDir, "blog", "index.html")))
+	firstPos := strings.Index(content, "first.html")
+	secondPos := strings.Index(content, "second.html")
+	unweightedPos := strings.Index(content, "unweighted.html")
+
+	if firstPos == -1 || secondPos == -1 || unweightedPos == -1 {
+		t.Fatalf("expected all TOC entries, got:\n%s", content)
+	}
+	if firstPos > secondPos {
+		t.Errorf("expected first (weight=1) before second (weight=2) in TOC")
+	}
+	if secondPos > unweightedPos {
+		t.Errorf("expected second (weight=2) before unweighted (weight=0) in TOC")
+	}
+}
+
+func TestBuildSectionTOCDefaultWeight(t *testing.T) {
+	siteDir := t.TempDir()
+	outDir := filepath.Join(siteDir, "dist")
+
+	// No toc_sort/toc_order in frontmatter — defaults to weight asc.
+	indexContent := "---\ntitle: \"Blog\"\n---\n# Blog\n"
+	if err := section.Create(siteDir, "blog", []byte(indexContent)); err != nil {
+		t.Fatal(err)
+	}
+	blogDir := filepath.Join(siteDir, "pages", "blog")
+	if err := os.WriteFile(filepath.Join(blogDir, "post.md"), []byte("# Post\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Build(siteDir, outDir); err != nil {
+		t.Fatalf("Build failed: %v", err)
+	}
+
+	content := string(mustRead(t, filepath.Join(outDir, "blog", "index.html")))
+	if !strings.Contains(content, "post.html") {
+		t.Errorf("expected post.html in TOC, got:\n%s", content)
+	}
+}
+
+func TestBuildTOCEmptyForNonSectionPages(t *testing.T) {
+	siteDir := t.TempDir()
+	outDir := filepath.Join(siteDir, "dist")
+
+	if err := page.Create(siteDir, "about", []byte("# About\n")); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Build(siteDir, outDir); err != nil {
+		t.Fatalf("Build failed: %v", err)
+	}
+
+	content := string(mustRead(t, filepath.Join(outDir, "about.html")))
+	if strings.Contains(content, "class=\"toc\"") {
+		t.Errorf("non-section pages should not have a TOC section, got:\n%s", content)
+	}
+}
+
+func TestBuildTOCEmptyForSectionChildPages(t *testing.T) {
+	siteDir := t.TempDir()
+	outDir := filepath.Join(siteDir, "dist")
+
+	if err := section.Create(siteDir, "blog", []byte("# Blog\n")); err != nil {
+		t.Fatal(err)
+	}
+	blogDir := filepath.Join(siteDir, "pages", "blog")
+	if err := os.WriteFile(filepath.Join(blogDir, "post.md"), []byte("# Post\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Build(siteDir, outDir); err != nil {
+		t.Fatalf("Build failed: %v", err)
+	}
+
+	// The child page (not the index) should NOT have a TOC.
+	content := string(mustRead(t, filepath.Join(outDir, "blog", "post.html")))
+	if strings.Contains(content, "class=\"toc\"") {
+		t.Errorf("section child pages should not have a TOC, got:\n%s", content)
+	}
+}
+
+func TestBuildSectionTOCIndexNotIncluded(t *testing.T) {
+	siteDir := t.TempDir()
+	outDir := filepath.Join(siteDir, "dist")
+
+	indexContent := "---\ntitle: \"Blog\"\ntoc_sort: \"title\"\ntoc_order: \"asc\"\n---\n# Blog\n"
+	if err := section.Create(siteDir, "blog", []byte(indexContent)); err != nil {
+		t.Fatal(err)
+	}
+	blogDir := filepath.Join(siteDir, "pages", "blog")
+	if err := os.WriteFile(filepath.Join(blogDir, "post.md"), []byte("# Post\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Build(siteDir, outDir); err != nil {
+		t.Fatalf("Build failed: %v", err)
+	}
+
+	content := string(mustRead(t, filepath.Join(outDir, "blog", "index.html")))
+	// The index page should not link to itself in the TOC.
+	if strings.Contains(content, ">index.html<") || strings.Contains(content, "href=\"index.html\"") {
+		t.Errorf("index.html should not appear in its own TOC, got:\n%s", content)
+	}
+}
+

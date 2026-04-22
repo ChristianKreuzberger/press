@@ -1,0 +1,1 @@
+Use [../AGENTS.md](../AGENTS.md) for guidelines on how AI agents should contribute to this project.

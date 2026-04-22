@@ -101,6 +101,78 @@ my-site/
 
 ---
 
+## Frontmatter
+
+Every `.md` file starts with a YAML frontmatter block created automatically by `press create page` and `press create section`:
+
+```yaml
+---
+title: "My Page"
+alias: ""
+tags: []
+weight: 0
+created_at: "2026-04-22T10:00:00Z"
+updated_at: "2026-04-22T10:00:00Z"
+---
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `title` | string | Display name used in navigation and the page `<title>` |
+| `alias` | string | Alternative URL slug (reserved for future use) |
+| `tags` | list | Content tags (reserved for future use) |
+| `weight` | integer | Controls the order of pages and sections in navigation. Lower values appear first. A value of `0` (default) means the item is sorted after all weighted items, in filesystem order. |
+| `created_at` | RFC 3339 | Creation timestamp |
+| `updated_at` | RFC 3339 | Last-updated timestamp |
+
+### Navigation ordering with `weight`
+
+Set `weight` on any page or section to control where it appears in the generated navigation:
+
+```yaml
+---
+title: "About"
+weight: 1
+---
+```
+
+```yaml
+---
+title: "Blog"
+weight: 2
+---
+```
+
+Pages without a weight (or `weight: 0`) are listed after all weighted items in their natural filesystem order.
+
+---
+
+## AI Agent Skill
+
+`press` ships a GitHub Copilot skill that lets AI agents install and use the tool without any extra prompting. Once installed, the agent automatically knows how to scaffold sites, manage pages and sections, build, and serve.
+
+### Install the skill
+
+Download the skill into your project's `.github/skills/` directory:
+
+```bash
+mkdir -p .github/skills/press
+curl -fsSL https://raw.githubusercontent.com/ChristianKreuzberger/press/main/.github/skills/press/SKILL.md \
+  -o .github/skills/press/SKILL.md
+```
+
+Or install it user-wide so it is available across all projects:
+
+```bash
+mkdir -p ~/.copilot/skills/press
+curl -fsSL https://raw.githubusercontent.com/ChristianKreuzberger/press/main/.github/skills/press/SKILL.md \
+  -o ~/.copilot/skills/press/SKILL.md
+```
+
+Once in place, GitHub Copilot will discover it automatically. You can also invoke it explicitly in chat by typing `/press`.
+
+---
+
 ## Contributing
 
 Contributions are welcome. Please read [`AGENTS.md`](AGENTS.md) before opening a pull request — it explains the project conventions and how AI agents can contribute safely.

@@ -6,11 +6,147 @@ import (
 	"time"
 )
 
+func TestGenerateSection(t *testing.T) {
+	now := time.Date(2026, 4, 22, 10, 0, 0, 0, time.UTC)
+	got := string(GenerateSection("Blog", now))
+
+	if !strings.Contains(got, `toc_sort: "weight"`) {
+		t.Errorf("expected toc_sort field, got: %s", got)
+	}
+	if !strings.Contains(got, `toc_order: "asc"`) {
+		t.Errorf("expected toc_order field, got: %s", got)
+	}
+	if !strings.Contains(got, `title: "Blog"`) {
+		t.Errorf("expected title field, got: %s", got)
+	}
+	if !strings.HasPrefix(got, "---\n") {
+		t.Error("expected frontmatter to start with ---")
+	}
+}
+
+func TestGenerateSection_DoesNotContainTOCFields(t *testing.T) {
+	// Regular Generate should NOT contain toc_sort or toc_order.
+	now := time.Now().UTC()
+	got := string(Generate("Page", now))
+
+	if strings.Contains(got, "toc_sort") {
+		t.Errorf("Generate() should not contain toc_sort, got: %s", got)
+	}
+	if strings.Contains(got, "toc_order") {
+		t.Errorf("Generate() should not contain toc_order, got: %s", got)
+	}
+}
+
+func TestParseStringField(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		field   string
+		want    string
+	}{
+		{
+			name:    "parses toc_sort title",
+			content: "---\ntitle: \"Blog\"\ntoc_sort: \"title\"\n---\n",
+			field:   "toc_sort",
+			want:    "title",
+		},
+		{
+			name:    "parses toc_order desc",
+			content: "---\ntoc_order: \"desc\"\n---\n",
+			field:   "toc_order",
+			want:    "desc",
+		},
+		{
+			name:    "parses toc_sort weight",
+			content: "---\ntoc_sort: \"weight\"\n---\n",
+			field:   "toc_sort",
+			want:    "weight",
+		},
+		{
+			name:    "returns empty when absent",
+			content: "---\ntitle: \"Test\"\n---\n",
+			field:   "toc_sort",
+			want:    "",
+		},
+		{
+			name:    "returns empty when no frontmatter",
+			content: "# Hello\n",
+			field:   "toc_sort",
+			want:    "",
+		},
+		{
+			name:    "strips surrounding quotes",
+			content: "---\ntoc_sort: \"created_at\"\n---\n",
+			field:   "toc_sort",
+			want:    "created_at",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ParseStringField([]byte(tt.content), tt.field)
+			if got != tt.want {
+				t.Errorf("ParseStringField(%q) = %q; want %q", tt.field, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestParseTimeField(t *testing.T) {
+	wantTime := time.Date(2026, 4, 22, 10, 0, 0, 0, time.UTC)
+	content := "---\ncreated_at: \"2026-04-22T10:00:00Z\"\n---\n"
+	got := ParseTimeField([]byte(content), "created_at")
+	if !got.Equal(wantTime) {
+		t.Errorf("ParseTimeField(created_at) = %v; want %v", got, wantTime)
+	}
+}
+
+func TestParseTimeField_UpdatedAt(t *testing.T) {
+	wantTime := time.Date(2025, 1, 15, 8, 30, 0, 0, time.UTC)
+	content := "---\nupdated_at: \"2025-01-15T08:30:00Z\"\n---\n"
+	got := ParseTimeField([]byte(content), "updated_at")
+	if !got.Equal(wantTime) {
+		t.Errorf("ParseTimeField(updated_at) = %v; want %v", got, wantTime)
+	}
+}
+
+func TestParseTimeField_AbsentReturnsZero(t *testing.T) {
+	content := "---\ntitle: \"Test\"\n---\n"
+	got := ParseTimeField([]byte(content), "created_at")
+	if !got.IsZero() {
+		t.Errorf("ParseTimeField() should return zero time when absent, got %v", got)
+	}
+}
+
+func TestParseTimeField_NoFrontmatterReturnsZero(t *testing.T) {
+	content := "# Hello\n"
+	got := ParseTimeField([]byte(content), "created_at")
+	if !got.IsZero() {
+		t.Errorf("ParseTimeField() should return zero time without frontmatter, got %v", got)
+	}
+}
+
+func TestParseTimeField_InvalidFormatReturnsZero(t *testing.T) {
+	content := "---\ncreated_at: \"not-a-date\"\n---\n"
+	got := ParseTimeField([]byte(content), "created_at")
+	if !got.IsZero() {
+		t.Errorf("ParseTimeField() should return zero time for invalid format, got %v", got)
+	}
+}
+
+func TestGenerateSection_TimestampFormat(t *testing.T) {
+	now := time.Date(2026, 12, 31, 23, 59, 59, 0, time.UTC)
+	got := string(GenerateSection("test", now))
+
+	if !strings.Contains(got, "2026-12-31T23:59:59Z") {
+		t.Errorf("expected RFC3339 timestamp in section frontmatter, got: %s", got)
+	}
+}
+
 func TestGenerate(t *testing.T) {
 	now := time.Date(2026, 4, 22, 10, 0, 0, 0, time.UTC)
 	got := string(Generate("Home", now))
 
-	want := "---\ntitle: \"Home\"\nalias: \"\"\ntags: []\ncreated_at: \"2026-04-22T10:00:00Z\"\nupdated_at: \"2026-04-22T10:00:00Z\"\n---\n"
+	want := "---\ntitle: \"Home\"\nalias: \"\"\ntags: []\nweight: 0\ncreated_at: \"2026-04-22T10:00:00Z\"\nupdated_at: \"2026-04-22T10:00:00Z\"\n---\n"
 	if got != want {
 		t.Errorf("Generate():\ngot:  %q\nwant: %q", got, want)
 	}
@@ -96,5 +232,71 @@ func TestGenerate_TimestampFormat(t *testing.T) {
 
 	if !strings.Contains(got, "2026-12-31T23:59:59Z") {
 		t.Errorf("expected RFC3339 timestamp in output, got: %s", got)
+	}
+}
+
+func TestGenerate_ContainsWeightField(t *testing.T) {
+	now := time.Now().UTC()
+	got := string(Generate("test", now))
+
+	if !strings.Contains(got, "weight: 0") {
+		t.Errorf("expected weight field in generated frontmatter, got: %s", got)
+	}
+}
+
+func TestParseWeight(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		want    int
+	}{
+		{
+			name:    "parses positive weight",
+			content: "---\ntitle: \"Test\"\nweight: 5\n---\n# Content\n",
+			want:    5,
+		},
+		{
+			name:    "returns 0 when weight absent",
+			content: "---\ntitle: \"Test\"\n---\n# Content\n",
+			want:    0,
+		},
+		{
+			name:    "returns 0 when no frontmatter",
+			content: "# Content\n",
+			want:    0,
+		},
+		{
+			name:    "returns 0 for explicit weight 0",
+			content: "---\ntitle: \"Test\"\nweight: 0\n---\n# Content\n",
+			want:    0,
+		},
+		{
+			name:    "returns 0 for non-integer weight",
+			content: "---\ntitle: \"Test\"\nweight: abc\n---\n# Content\n",
+			want:    0,
+		},
+		{
+			name:    "parses weight 1",
+			content: "---\ntitle: \"Test\"\nweight: 1\n---\n# Content\n",
+			want:    1,
+		},
+		{
+			name:    "parses generated frontmatter weight",
+			content: "---\ntitle: \"Home\"\nalias: \"\"\ntags: []\nweight: 0\ncreated_at: \"2026-01-01T00:00:00Z\"\nupdated_at: \"2026-01-01T00:00:00Z\"\n---\n# Home\n",
+			want:    0,
+		},
+		{
+			name:    "parses large weight value",
+			content: "---\nweight: 999\ntitle: \"Heavy\"\n---\n",
+			want:    999,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ParseWeight([]byte(tt.content))
+			if got != tt.want {
+				t.Errorf("ParseWeight() = %d, want %d", got, tt.want)
+			}
+		})
 	}
 }

@@ -348,6 +348,49 @@ func TestE2ESection(t *testing.T) {
 	runExpectError(t, siteDir, "update", "section", "blog")
 }
 
+func TestE2ESectionTOC(t *testing.T) {
+	siteDir := t.TempDir()
+	run(t, siteDir, "init")
+
+	// Create a section with toc_sort by title.
+	blogIndexMD := filepath.Join(t.TempDir(), "blog-index.md")
+	writeFile(t, blogIndexMD, "---\ntitle: \"Blog\"\ntoc_sort: \"title\"\ntoc_order: \"asc\"\n---\n# Blog\n\nAll posts.\n")
+	run(t, siteDir, "create", "section", "blog", "--file", blogIndexMD)
+
+	blogDir := filepath.Join(siteDir, "pages", "blog")
+	writeFile(t, filepath.Join(blogDir, "zebra-post.md"), "# Zebra Post\n\nZ content.\n")
+	writeFile(t, filepath.Join(blogDir, "apple-post.md"), "# Apple Post\n\nA content.\n")
+
+	run(t, siteDir, "build")
+
+	distDir := filepath.Join(siteDir, "dist")
+	blogIndexHTML := filepath.Join(distDir, "blog", "index.html")
+
+	content := readFile(t, blogIndexHTML)
+
+	// TOC section must be present.
+	if !strings.Contains(content, "Contents") {
+		t.Errorf("blog/index.html should contain a TOC, got:\n%s", content)
+	}
+
+	// apple-post should come before zebra-post (title asc).
+	applePos := strings.Index(content, "apple-post.html")
+	zebraPos := strings.Index(content, "zebra-post.html")
+	if applePos == -1 || zebraPos == -1 {
+		t.Fatalf("expected both TOC entries in blog/index.html, got:\n%s", content)
+	}
+	if applePos > zebraPos {
+		t.Errorf("expected apple-post.html before zebra-post.html (title asc)")
+	}
+
+	// Child pages themselves should not have a TOC.
+	postContent := readFile(t, filepath.Join(distDir, "blog", "apple-post.html"))
+	if strings.Contains(postContent, "class=\"toc\"") {
+		t.Errorf("child page should not have a TOC section, got:\n%s", postContent)
+	}
+}
+
+
 func TestE2ETree(t *testing.T) {
 	siteDir := t.TempDir()
 
