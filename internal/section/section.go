@@ -42,7 +42,7 @@ func validateName(name string) error {
 	if name == "" || name == "." || name == ".." {
 		return fmt.Errorf("%w: %q", ErrInvalidName, name)
 	}
-	if strings.ContainsAny(name, "/\\") || strings.ContainsRune(name, filepath.Separator) {
+	if strings.ContainsAny(name, "/\\") {
 		return fmt.Errorf("%w: %q (must not contain path separators)", ErrInvalidName, name)
 	}
 	return nil
