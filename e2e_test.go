@@ -347,3 +347,51 @@ func TestE2ESection(t *testing.T) {
 	// --- section update without --file should fail ---
 	runExpectError(t, siteDir, "update", "section", "blog")
 }
+
+func TestE2ETree(t *testing.T) {
+	siteDir := t.TempDir()
+
+	// --- empty site: no pages or sections ---
+	out := run(t, siteDir, "tree")
+	if !strings.Contains(out, "no pages or sections") {
+		t.Errorf("tree on empty site should say 'no pages or sections', got: %s", out)
+	}
+
+	// --- after init: only index page ---
+	run(t, siteDir, "init")
+	out = run(t, siteDir, "tree")
+	if !strings.Contains(out, "pages/") {
+		t.Errorf("tree should show 'pages/' header, got: %s", out)
+	}
+	if !strings.Contains(out, "index") {
+		t.Errorf("tree should show 'index' page, got: %s", out)
+	}
+
+	// --- add a page and a section with a page ---
+	run(t, siteDir, "create", "page", "about")
+	run(t, siteDir, "create", "section", "blog")
+	blogDir := filepath.Join(siteDir, "pages", "blog")
+	writeFile(t, filepath.Join(blogDir, "first-post.md"), "# First Post\n\nHello world!\n")
+
+	out = run(t, siteDir, "tree")
+
+	// pages/ header
+	if !strings.Contains(out, "pages/") {
+		t.Errorf("tree should show 'pages/' header, got: %s", out)
+	}
+	// top-level pages
+	if !strings.Contains(out, "about") {
+		t.Errorf("tree should show 'about' page, got: %s", out)
+	}
+	if !strings.Contains(out, "index") {
+		t.Errorf("tree should show 'index' page, got: %s", out)
+	}
+	// section
+	if !strings.Contains(out, "blog/") {
+		t.Errorf("tree should show 'blog/' section, got: %s", out)
+	}
+	// section pages
+	if !strings.Contains(out, "first-post") {
+		t.Errorf("tree should show 'first-post' under blog, got: %s", out)
+	}
+}
