@@ -1,5 +1,11 @@
 # press
 
+[![GitHub release](https://img.shields.io/github/v/release/ChristianKreuzberger/press)](https://github.com/ChristianKreuzberger/press/releases/latest)
+[![CI](https://github.com/ChristianKreuzberger/press/workflows/CI/badge.svg)](https://github.com/ChristianKreuzberger/press/actions/workflows/ci.yml)
+[![Go version](https://img.shields.io/github/go-mod/go-version/ChristianKreuzberger/press)](https://go.dev/)
+[![Go Report Card](https://goreportcard.com/badge/github.com/ChristianKreuzberger/press)](https://goreportcard.com/report/github.com/ChristianKreuzberger/press)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 > A fast, single-binary static-site generator built for developers and AI agents alike.
 
 `press` turns structured Markdown content into a clean static website — no config files, no plugin ecosystem, no magic. One binary. Zero runtime dependencies.
