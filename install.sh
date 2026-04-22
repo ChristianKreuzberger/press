@@ -92,7 +92,7 @@ download() {
 main() {
   need uname
 
-  local os arch version archive ext install_dir tmp_dir
+  local os arch version archive ext install_dir
 
   os="$(detect_os)"
   arch="$(detect_arch)"
