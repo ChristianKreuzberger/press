@@ -257,6 +257,46 @@ func TestExpandYouTube(t *testing.T) {
 	}
 }
 
+func TestToHTML_YouTubeShortcode_SkipsInlineCode(t *testing.T) {
+	got := ToHTML("`!youtube[dQw4w9WgXcQ]`")
+	if strings.Contains(got, "<iframe") {
+		t.Errorf("shortcode inside inline code must not expand, got %q", got)
+	}
+	if !strings.Contains(got, "!youtube[dQw4w9WgXcQ]") {
+		t.Errorf("shortcode text must be preserved inside inline code, got %q", got)
+	}
+}
+
+func TestExpandYouTube_FenceCharMismatch(t *testing.T) {
+	// ~~~ fence opened; ``` line must NOT close it.
+	md := "~~~\n!youtube[dQw4w9WgXcQ]\n```\n!youtube[dQw4w9WgXcQ]\n~~~"
+	got := expandYouTube(md)
+	if strings.Contains(got, "<iframe") {
+		t.Errorf("shortcode inside ~~~-fenced block must not expand, got %q", got)
+	}
+}
+
+func TestExpandYouTube_FenceLengthMismatch(t *testing.T) {
+	// ```` fence (4 backticks); ``` closer (3 backticks) must NOT close it.
+	md := "````\n!youtube[dQw4w9WgXcQ]\n```\nstill inside\n````"
+	got := expandYouTube(md)
+	if strings.Contains(got, "<iframe") {
+		t.Errorf("shortcode inside 4-backtick fence must not expand, got %q", got)
+	}
+}
+
+func TestExpandYouTube_MidParagraph(t *testing.T) {
+	// Shortcode mid-sentence must not expand.
+	md := "Watch !youtube[dQw4w9WgXcQ] here."
+	got := expandYouTube(md)
+	if strings.Contains(got, "<iframe") {
+		t.Errorf("mid-paragraph shortcode must not expand, got %q", got)
+	}
+	if !strings.Contains(got, "!youtube[dQw4w9WgXcQ]") {
+		t.Errorf("original text must be preserved, got %q", got)
+	}
+}
+
 func TestExtractTitle(t *testing.T) {
 	cases := []struct {
 		input string

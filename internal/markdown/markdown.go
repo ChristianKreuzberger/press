@@ -5,6 +5,7 @@ package markdown
 import (
 	"bytes"
 	"fmt"
+	stdhtml "html"
 	"regexp"
 	"strings"
 
@@ -16,7 +17,7 @@ import (
 
 // ytShortcode matches !youtube[VIDEO_ID] where VIDEO_ID is an 11-character
 // YouTube video identifier consisting of alphanumeric characters, hyphens, and underscores.
-var ytShortcode = regexp.MustCompile(`!youtube\[([a-zA-Z0-9_-]{11})\]`)
+var ytShortcode = regexp.MustCompile(`^[ \t]*!youtube\[([a-zA-Z0-9_-]{11})\][ \t]*$`)
 
 // fenceMarker matches the opening of a fenced code block (``` or ~~~).
 var fenceMarker = regexp.MustCompile("^[ \t]*(`{3,}|~{3,})")
@@ -26,21 +27,33 @@ var fenceMarker = regexp.MustCompile("^[ \t]*(`{3,}|~{3,})")
 func expandYouTube(md string) string {
 	lines := strings.Split(md, "\n")
 	inFence := false
+	var fenceChar byte
+	var fenceLen int
+
 	for i, line := range lines {
-		if fenceMarker.MatchString(line) {
-			inFence = !inFence
+		sub := fenceMarker.FindStringSubmatch(line)
+		if sub != nil {
+			run := sub[1]
+			if !inFence {
+				inFence = true
+				fenceChar = run[0]
+				fenceLen = len(run)
+				continue
+			}
+			// Close only when same character and length >= opening length.
+			if run[0] == fenceChar && len(run) >= fenceLen {
+				inFence = false
+				fenceChar = 0
+				fenceLen = 0
+			}
 			continue
 		}
 		if inFence {
 			continue
 		}
-		lines[i] = ytShortcode.ReplaceAllStringFunc(line, func(m string) string {
-			sub := ytShortcode.FindStringSubmatch(m)
-			if len(sub) < 2 {
-				return m
-			}
-			id := sub[1]
-			return fmt.Sprintf(
+		if m := ytShortcode.FindStringSubmatch(line); m != nil {
+			id := m[1]
+			lines[i] = fmt.Sprintf(
 				`<iframe style="width:100%%;aspect-ratio:16/9;" `+
 					`src="https://www.youtube-nocookie.com/embed/%s" `+
 					`title="YouTube video player" `+
@@ -48,7 +61,7 @@ func expandYouTube(md string) string {
 					`allowfullscreen></iframe>`,
 				id,
 			)
-		})
+		}
 	}
 	return strings.Join(lines, "\n")
 }
@@ -81,7 +94,7 @@ func ToHTML(md string) string {
 	var buf bytes.Buffer
 	if err := gm.Convert([]byte(md), &buf); err != nil {
 		// Fallback: return escaped source on unexpected errors.
-		return "<p>" + md + "</p>"
+		return "<p>" + stdhtml.EscapeString(md) + "</p>"
 	}
 	return buf.String()
 }
