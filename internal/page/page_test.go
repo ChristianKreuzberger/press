@@ -1,6 +1,7 @@
 package page
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -122,5 +123,13 @@ func TestUpdateNotFound(t *testing.T) {
 	dir := t.TempDir()
 	if err := Update(dir, "missing", []byte("x")); err == nil {
 		t.Error("expected error updating non-existent page, got nil")
+	}
+}
+
+func TestUpdatePathTraversal(t *testing.T) {
+	dir := t.TempDir()
+	err := Update(dir, "../../etc/passwd", []byte("evil"))
+	if !errors.Is(err, ErrInvalidName) {
+		t.Errorf("expected ErrInvalidName for path traversal, got %v", err)
 	}
 }

@@ -58,11 +58,7 @@ func runServe(args []string) {
 	intervalFlag := fs.Duration("interval", time.Second, "polling interval for file changes")
 	_ = fs.Parse(args)
 
-	siteDir, err := os.Getwd()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error getting working directory: %v\n", err)
-		os.Exit(1)
-	}
+	siteDir := mustGetwd()
 
 	outputDir := filepath.Join(siteDir, *outputFlag)
 
