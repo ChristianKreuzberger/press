@@ -10,6 +10,7 @@ permissions:
   contents: read
 
 jobs:
+
   lint:
     name: Lint
     runs-on: ubuntu-latest
@@ -29,6 +30,9 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       - uses: actions/checkout@v6
 
@@ -41,7 +45,35 @@ jobs:
         run: go vet ./...
 
       - name: Test
-        run: go test ./...
+        run: go test -coverprofile=coverage.out -covermode=atomic ./...
 
       - name: Build
         run: go build ./...
+
+      - name: Coverage summary
+        id: coverage
+        run: |
+          TOTAL=$(go tool cover -func=coverage.out | grep total | awk '{print $3}')
+          echo "total=$TOTAL" >> "$GITHUB_OUTPUT"
+          {
+            echo "report<<EOF"
+            go tool cover -func=coverage.out
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Comment coverage on PR
+        if: github.event_name == 'pull_request'
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: coverage
+          message: |
+            ## Code Coverage: ${{ steps.coverage.outputs.total }}
+
+            <details>
+            <summary>Coverage by package</summary>
+
+            ```
+            ${{ steps.coverage.outputs.report }}
+            ```
+
+            </details>
