@@ -731,6 +731,9 @@ func TestBuildSectionTOCFallbackTitle(t *testing.T) {
 	if !strings.Contains(content, "no-heading.html") {
 		t.Errorf("expected no-heading.html in TOC, got:\n%s", content)
 	}
+	if !strings.Contains(content, ">no-heading<") {
+		t.Errorf("expected fallback title no-heading in TOC entry text, got:\n%s", content)
+	}
 }
 
 func TestBuildInvalidTemplate(t *testing.T) {
@@ -761,6 +764,9 @@ func TestBuildUnreadableTemplate(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { os.Chmod(tmplPath, 0644) }) //nolint:errcheck
+	if _, err := os.ReadFile(tmplPath); err == nil {
+		t.Skip("skipping: filesystem does not enforce permission bits")
+	}
 
 	if err := Build(siteDir, outDir); err == nil {
 		t.Error("expected error for unreadable template, got nil")
@@ -782,6 +788,9 @@ func TestBuildUnreadablePage(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { os.Chmod(pagePath, 0644) }) //nolint:errcheck
+	if _, err := os.ReadFile(pagePath); err == nil {
+		t.Skip("skipping: filesystem does not enforce permission bits")
+	}
 
 	if err := Build(siteDir, outDir); err == nil {
 		t.Error("expected error for unreadable page, got nil")
