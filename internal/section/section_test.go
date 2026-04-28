@@ -1,6 +1,7 @@
 package section
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -235,6 +236,39 @@ func TestListPagesRejectsInvalidName(t *testing.T) {
 		if _, err := ListPages(dir, name); err == nil {
 			t.Errorf("ListPages with name %q should fail, got nil", name)
 		}
+	}
+}
+
+func TestListWithFileInPagesDir(t *testing.T) {
+	dir := t.TempDir()
+	// A plain file (not a directory) inside pages/ should be silently skipped.
+	if err := os.MkdirAll(filepath.Join(dir, "pages"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "pages", "about.md"), []byte("# About\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	sections, err := List(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sections) != 0 {
+		t.Errorf("expected 0 sections when pages/ only contains files, got %d", len(sections))
+	}
+}
+
+func TestUpdateMissingIndexMD(t *testing.T) {
+	dir := t.TempDir()
+	// Create the section directory manually without an index.md.
+	sectionPath := filepath.Join(dir, "pages", "blog")
+	if err := os.MkdirAll(sectionPath, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	err := Update(dir, "blog", []byte("# Blog\n"))
+	if !errors.Is(err, ErrSectionNotFound) {
+		t.Errorf("expected ErrSectionNotFound when index.md is absent, got %v", err)
 	}
 }
 

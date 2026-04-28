@@ -133,3 +133,12 @@ func TestUpdatePathTraversal(t *testing.T) {
 		t.Errorf("expected ErrInvalidName for path traversal, got %v", err)
 	}
 }
+
+func TestDeletePathTraversal(t *testing.T) {
+	dir := t.TempDir()
+	err := Delete(dir, "../../etc/passwd")
+	if !errors.Is(err, ErrInvalidName) {
+		t.Errorf("expected ErrInvalidName for path traversal, got %v", err)
+	}
+}
+

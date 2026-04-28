@@ -225,14 +225,13 @@ func sortTOC(entries []TOCEntry, by, order string) {
 		default: // "weight"
 			wi, wj := entries[i].Weight, entries[j].Weight
 			if order == "desc" {
-				if wi == 0 && wj == 0 {
+				// weight=0 (unset) always sorts last regardless of direction.
+				// wi==0 covers both the "both zero" and "only wi zero" cases.
+				if wi == 0 {
 					return false
 				}
-				if wi == 0 {
-					return false // unset always goes last
-				}
 				if wj == 0 {
-					return true // unset always goes last
+					return true
 				}
 				return wj < wi
 			}
