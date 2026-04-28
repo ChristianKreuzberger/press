@@ -137,6 +137,166 @@ func TestToHTML_TaskList(t *testing.T) {
 	}
 }
 
+func TestToHTML_YouTubeShortcode(t *testing.T) {
+	cases := []struct {
+		name    string
+		input   string
+		wantSrc string
+		wantIn  bool
+	}{
+		{
+			name:    "basic shortcode",
+			input:   "!youtube[dQw4w9WgXcQ]",
+			wantSrc: "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ",
+			wantIn:  true,
+		},
+		{
+			name:    "shortcode with surrounding text",
+			input:   "Watch this:\n\n!youtube[dQw4w9WgXcQ]\n\nEnd.",
+			wantSrc: "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ",
+			wantIn:  true,
+		},
+		{
+			name:    "invalid id too short",
+			input:   "!youtube[short]",
+			wantSrc: "youtube-nocookie.com/embed/short",
+			wantIn:  false,
+		},
+		{
+			name:    "invalid id too long",
+			input:   "!youtube[toolongvideoidstring]",
+			wantSrc: "youtube-nocookie.com/embed/toolongvideoidstring",
+			wantIn:  false,
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := ToHTML(c.input)
+			if c.wantIn && !strings.Contains(got, c.wantSrc) {
+				t.Errorf("ToHTML(%q) = %q; expected to contain %q", c.input, got, c.wantSrc)
+			}
+			if !c.wantIn && strings.Contains(got, c.wantSrc) {
+				t.Errorf("ToHTML(%q) = %q; expected NOT to contain %q", c.input, got, c.wantSrc)
+			}
+		})
+	}
+}
+
+func TestToHTML_YouTubeShortcode_IframeAttributes(t *testing.T) {
+	got := ToHTML("!youtube[dQw4w9WgXcQ]")
+	checks := []string{
+		"<iframe",
+		"allowfullscreen",
+		"youtube-nocookie.com/embed/dQw4w9WgXcQ",
+		"aspect-ratio:16/9",
+	}
+	for _, want := range checks {
+		if !strings.Contains(got, want) {
+			t.Errorf("ToHTML youtube shortcode missing %q in output: %q", want, got)
+		}
+	}
+	if strings.Contains(got, "frameborder") {
+		t.Errorf("ToHTML youtube shortcode should not contain deprecated frameborder attribute, got %q", got)
+	}
+	if strings.Contains(got, `width="560"`) {
+		t.Errorf("ToHTML youtube shortcode should not contain hardcoded width, got %q", got)
+	}
+}
+
+func TestToHTML_YouTubeShortcode_SkipsCodeBlock(t *testing.T) {
+	md := "```\n!youtube[dQw4w9WgXcQ]\n```"
+	got := ToHTML(md)
+	if strings.Contains(got, "<iframe") {
+		t.Errorf("ToHTML should not expand youtube shortcode inside fenced code block, got %q", got)
+	}
+	if !strings.Contains(got, "!youtube[dQw4w9WgXcQ]") {
+		t.Errorf("ToHTML should preserve shortcode text inside fenced code block, got %q", got)
+	}
+}
+
+func TestExpandYouTube(t *testing.T) {
+	cases := []struct {
+		name      string
+		input     string
+		wantIn    string
+		wantNotIn string
+	}{
+		{
+			name:   "replaces valid shortcode",
+			input:  "!youtube[dQw4w9WgXcQ]",
+			wantIn: "dQw4w9WgXcQ",
+		},
+		{
+			name:   "leaves non-shortcode text unchanged",
+			input:  "just text",
+			wantIn: "just text",
+		},
+		{
+			// abc-DEF_123 is exactly 11 characters: a,b,c,-,D,E,F,_,1,2,3
+			name:   "handles hyphens and underscores in id",
+			input:  "!youtube[abc-DEF_123]",
+			wantIn: "youtube-nocookie.com/embed/abc-DEF_123",
+		},
+		{
+			name:      "skips shortcode inside fenced code block",
+			input:     "```\n!youtube[dQw4w9WgXcQ]\n```",
+			wantNotIn: "<iframe",
+			wantIn:    "!youtube[dQw4w9WgXcQ]",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := expandYouTube(c.input)
+			if c.wantIn != "" && !strings.Contains(got, c.wantIn) {
+				t.Errorf("expandYouTube(%q) = %q; expected to contain %q", c.input, got, c.wantIn)
+			}
+			if c.wantNotIn != "" && strings.Contains(got, c.wantNotIn) {
+				t.Errorf("expandYouTube(%q) = %q; expected NOT to contain %q", c.input, got, c.wantNotIn)
+			}
+		})
+	}
+}
+
+func TestToHTML_YouTubeShortcode_SkipsInlineCode(t *testing.T) {
+	got := ToHTML("`!youtube[dQw4w9WgXcQ]`")
+	if strings.Contains(got, "<iframe") {
+		t.Errorf("shortcode inside inline code must not expand, got %q", got)
+	}
+	if !strings.Contains(got, "!youtube[dQw4w9WgXcQ]") {
+		t.Errorf("shortcode text must be preserved inside inline code, got %q", got)
+	}
+}
+
+func TestExpandYouTube_FenceCharMismatch(t *testing.T) {
+	// ~~~ fence opened; ``` line must NOT close it.
+	md := "~~~\n!youtube[dQw4w9WgXcQ]\n```\n!youtube[dQw4w9WgXcQ]\n~~~"
+	got := expandYouTube(md)
+	if strings.Contains(got, "<iframe") {
+		t.Errorf("shortcode inside ~~~-fenced block must not expand, got %q", got)
+	}
+}
+
+func TestExpandYouTube_FenceLengthMismatch(t *testing.T) {
+	// ```` fence (4 backticks); ``` closer (3 backticks) must NOT close it.
+	md := "````\n!youtube[dQw4w9WgXcQ]\n```\nstill inside\n````"
+	got := expandYouTube(md)
+	if strings.Contains(got, "<iframe") {
+		t.Errorf("shortcode inside 4-backtick fence must not expand, got %q", got)
+	}
+}
+
+func TestExpandYouTube_MidParagraph(t *testing.T) {
+	// Shortcode mid-sentence must not expand.
+	md := "Watch !youtube[dQw4w9WgXcQ] here."
+	got := expandYouTube(md)
+	if strings.Contains(got, "<iframe") {
+		t.Errorf("mid-paragraph shortcode must not expand, got %q", got)
+	}
+	if !strings.Contains(got, "!youtube[dQw4w9WgXcQ]") {
+		t.Errorf("original text must be preserved, got %q", got)
+	}
+}
+
 func TestExtractTitle(t *testing.T) {
 	cases := []struct {
 		input string

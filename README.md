@@ -169,6 +169,34 @@ Pages without a weight (or `weight: 0`) are listed after all weighted items in t
 
 ---
 
+## Markdown extensions
+
+press supports a small set of shortcodes on top of standard GitHub-Flavored Markdown.
+
+### YouTube embed
+
+Place a `!youtube[VIDEO_ID]` shortcode on its own line to embed a responsive YouTube player:
+
+```markdown
+!youtube[dQw4w9WgXcQ]
+```
+
+The `VIDEO_ID` is the 11-character identifier from the YouTube URL (e.g. `https://www.youtube.com/watch?v=dQw4w9WgXcQ`).
+
+The shortcode renders as a privacy-enhanced iframe (`youtube-nocookie.com`) that fills 100% of the column width and maintains a 16:9 aspect ratio:
+
+```html
+<iframe style="width:100%;aspect-ratio:16/9;"
+  src="https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ"
+  title="YouTube video player"
+  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+  allowfullscreen></iframe>
+```
+
+The shortcode is only expanded when it appears on a standalone line. It is left as-is inside fenced code blocks (` ``` `) and inline code spans (`` ` ``), so you can document it safely.
+
+---
+
 ## AI Agent Skill
 
 `press` ships a GitHub Copilot skill that lets AI agents install and use the tool without any extra prompting. Once installed, the agent automatically knows how to scaffold sites, manage pages and sections, build, and serve.
