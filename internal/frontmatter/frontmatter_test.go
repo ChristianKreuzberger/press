@@ -308,3 +308,11 @@ func TestParseWeight(t *testing.T) {
 		})
 	}
 }
+func TestParseStringField_UnclosedFrontmatter(t *testing.T) {
+	// Frontmatter that starts with --- but has no closing delimiter returns "".
+	content := "---\ntitle: \"Hello\"\n"
+	got := ParseStringField([]byte(content), "title")
+	if got != "" {
+		t.Errorf("expected empty string for unclosed frontmatter, got %q", got)
+	}
+}

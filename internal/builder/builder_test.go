@@ -639,3 +639,153 @@ func TestWeightLess(t *testing.T) {
 	}
 }
 
+func TestBuildSectionTOCByWeightDesc(t *testing.T) {
+	siteDir := t.TempDir()
+	outDir := filepath.Join(siteDir, "dist")
+
+	indexContent := "---\ntitle: \"Blog\"\ntoc_sort: \"weight\"\ntoc_order: \"desc\"\n---\n# Blog\n"
+	if err := section.Create(siteDir, "blog", []byte(indexContent)); err != nil {
+		t.Fatal(err)
+	}
+	blogDir := filepath.Join(siteDir, "pages", "blog")
+	for name, body := range map[string]string{
+		"heavy.md":      "---\nweight: 2\n---\n# Heavy\n",
+		"light.md":      "---\nweight: 1\n---\n# Light\n",
+		"unweighted.md": "---\nweight: 0\n---\n# Unweighted\n",
+	} {
+		if err := os.WriteFile(filepath.Join(blogDir, name), []byte(body), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := Build(siteDir, outDir); err != nil {
+		t.Fatalf("Build failed: %v", err)
+	}
+
+	content := string(mustRead(t, filepath.Join(outDir, "blog", "index.html")))
+	heavyPos := strings.Index(content, "heavy.html")
+	lightPos := strings.Index(content, "light.html")
+	unweightedPos := strings.Index(content, "unweighted.html")
+
+	if heavyPos == -1 || lightPos == -1 || unweightedPos == -1 {
+		t.Fatalf("expected all TOC entries, got:\n%s", content)
+	}
+	if heavyPos > lightPos {
+		t.Errorf("expected heavy (weight=2) before light (weight=1) in desc TOC")
+	}
+	if lightPos > unweightedPos {
+		t.Errorf("expected light (weight=1) before unweighted (weight=0) in desc TOC")
+	}
+}
+
+func TestBuildSectionTOCByUpdatedAtAsc(t *testing.T) {
+	siteDir := t.TempDir()
+	outDir := filepath.Join(siteDir, "dist")
+
+	indexContent := "---\ntitle: \"Blog\"\ntoc_sort: \"updated_at\"\ntoc_order: \"asc\"\n---\n# Blog\n"
+	if err := section.Create(siteDir, "blog", []byte(indexContent)); err != nil {
+		t.Fatal(err)
+	}
+	blogDir := filepath.Join(siteDir, "pages", "blog")
+	if err := os.WriteFile(filepath.Join(blogDir, "older.md"), []byte("---\nupdated_at: \"2024-01-01T00:00:00Z\"\n---\n# Older\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(blogDir, "newer.md"), []byte("---\nupdated_at: \"2025-06-01T00:00:00Z\"\n---\n# Newer\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Build(siteDir, outDir); err != nil {
+		t.Fatalf("Build failed: %v", err)
+	}
+
+	content := string(mustRead(t, filepath.Join(outDir, "blog", "index.html")))
+	olderPos := strings.Index(content, "older.html")
+	newerPos := strings.Index(content, "newer.html")
+
+	if olderPos == -1 || newerPos == -1 {
+		t.Fatalf("expected both TOC entries, got:\n%s", content)
+	}
+	if olderPos > newerPos {
+		t.Errorf("expected older.html before newer.html in TOC (updated_at asc)")
+	}
+}
+
+func TestBuildSectionTOCFallbackTitle(t *testing.T) {
+	siteDir := t.TempDir()
+	outDir := filepath.Join(siteDir, "dist")
+
+	if err := section.Create(siteDir, "blog", []byte("# Blog\n")); err != nil {
+		t.Fatal(err)
+	}
+	// Page without a markdown heading — filename is used as the TOC title.
+	blogDir := filepath.Join(siteDir, "pages", "blog")
+	if err := os.WriteFile(filepath.Join(blogDir, "no-heading.md"), []byte("Just some content.\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Build(siteDir, outDir); err != nil {
+		t.Fatalf("Build failed: %v", err)
+	}
+
+	content := string(mustRead(t, filepath.Join(outDir, "blog", "index.html")))
+	if !strings.Contains(content, "no-heading.html") {
+		t.Errorf("expected no-heading.html in TOC, got:\n%s", content)
+	}
+}
+
+func TestBuildInvalidTemplate(t *testing.T) {
+	siteDir := t.TempDir()
+	outDir := filepath.Join(siteDir, "dist")
+
+	if err := os.WriteFile(filepath.Join(siteDir, "template.html"), []byte("{{invalid template{{"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := page.Create(siteDir, "index", []byte("# Home\n")); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Build(siteDir, outDir); err == nil {
+		t.Error("expected error for invalid template, got nil")
+	}
+}
+
+func TestBuildUnreadableTemplate(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("skipping permission test: running as root")
+	}
+	siteDir := t.TempDir()
+	outDir := filepath.Join(siteDir, "dist")
+
+	tmplPath := filepath.Join(siteDir, "template.html")
+	if err := os.WriteFile(tmplPath, []byte("<html></html>"), 0000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(tmplPath, 0644) }) //nolint:errcheck
+
+	if err := Build(siteDir, outDir); err == nil {
+		t.Error("expected error for unreadable template, got nil")
+	}
+}
+
+func TestBuildUnreadablePage(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("skipping permission test: running as root")
+	}
+	siteDir := t.TempDir()
+	outDir := filepath.Join(siteDir, "dist")
+
+	if err := page.Create(siteDir, "index", []byte("# Home\n")); err != nil {
+		t.Fatal(err)
+	}
+	pagePath := filepath.Join(siteDir, "pages", "index.md")
+	if err := os.Chmod(pagePath, 0000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(pagePath, 0644) }) //nolint:errcheck
+
+	if err := Build(siteDir, outDir); err == nil {
+		t.Error("expected error for unreadable page, got nil")
+	}
+}
+
+
