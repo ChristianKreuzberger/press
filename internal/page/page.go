@@ -97,7 +97,13 @@ func Delete(siteDir, name string) error {
 
 // Update replaces the content of an existing page.
 func Update(siteDir, name string, content []byte) error {
-	path := filepath.Join(PagesDir(siteDir), name+".md")
+	dir := PagesDir(siteDir)
+	path := filepath.Join(dir, filepath.FromSlash(name)+".md")
+	// Prevent path traversal: resolved path must remain inside pages dir.
+	cleanDir := filepath.Clean(dir) + string(filepath.Separator)
+	if !strings.HasPrefix(filepath.Clean(path), cleanDir) {
+		return fmt.Errorf("%w: %q", ErrInvalidName, name)
+	}
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return fmt.Errorf("%w: %q", ErrPageNotFound, name)
 	}

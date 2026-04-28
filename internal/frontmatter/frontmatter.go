@@ -76,31 +76,18 @@ func ParseTimeField(content []byte, field string) time.Time {
 }
 
 // ParseWeight extracts the weight field value from YAML frontmatter.
-// It scans for a line of the form "weight: <integer>" within the --- delimiters.
 // Returns 0 if the field is absent, unparseable, or no frontmatter block is found.
+// Quoted integers (e.g. weight: "5") are accepted and return 5.
 func ParseWeight(content []byte) int {
-	s := string(content)
-	const delim = "---"
-	if !strings.HasPrefix(s, delim+"\n") {
+	val := parseField(content, "weight")
+	if val == "" {
 		return 0
 	}
-	rest := s[len(delim)+1:]
-	end := strings.Index(rest, "\n"+delim)
-	if end == -1 {
+	n, err := strconv.Atoi(val)
+	if err != nil {
 		return 0
 	}
-	block := rest[:end]
-	for _, line := range strings.Split(block, "\n") {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "weight:") {
-			val := strings.TrimSpace(strings.TrimPrefix(trimmed, "weight:"))
-			n, err := strconv.Atoi(val)
-			if err == nil {
-				return n
-			}
-		}
-	}
-	return 0
+	return n
 }
 
 // Strip removes YAML frontmatter from the beginning of a markdown document.

@@ -621,3 +621,21 @@ func TestBuildSectionTOCIndexNotIncluded(t *testing.T) {
 	}
 }
 
+func TestWeightLess(t *testing.T) {
+	tests := []struct {
+		wi, wj int
+		want   bool
+	}{
+		{1, 2, true},
+		{2, 1, false},
+		{0, 5, false}, // unset sorts after 5
+		{5, 0, true},  // 5 sorts before unset
+		{0, 0, false}, // equal
+	}
+	for _, tc := range tests {
+		if got := weightLess(tc.wi, tc.wj); got != tc.want {
+			t.Errorf("weightLess(%d, %d) = %v, want %v", tc.wi, tc.wj, got, tc.want)
+		}
+	}
+}
+

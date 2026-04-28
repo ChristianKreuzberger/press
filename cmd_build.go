@@ -14,11 +14,7 @@ func runBuild(args []string) {
 	outputFlag := fs.String("output", "dist", "output directory for generated HTML files")
 	_ = fs.Parse(args)
 
-	siteDir, err := os.Getwd()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error getting working directory: %v\n", err)
-		os.Exit(1)
-	}
+	siteDir := mustGetwd()
 
 	outputDir := filepath.Join(siteDir, *outputFlag)
 

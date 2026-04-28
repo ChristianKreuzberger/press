@@ -39,7 +39,6 @@ func runInit(args []string) {
 		siteDir = fs.Arg(0)
 	}
 
-	// Create pages directory
 	pagesDir := filepath.Join(siteDir, "pages")
 	if _, err := os.Stat(pagesDir); os.IsNotExist(err) {
 		if err := os.MkdirAll(pagesDir, 0755); err != nil {
@@ -52,7 +51,7 @@ func runInit(args []string) {
 		os.Exit(1)
 	}
 
-	// Create pages/index.md (do not overwrite if it already exists)
+	// Write pages/index.md only if absent.
 	indexPath := filepath.Join(pagesDir, "index.md")
 	if _, err := os.Stat(indexPath); os.IsNotExist(err) {
 		indexContent := append(frontmatter.Generate("Home", time.Now()), []byte("# Home\n\nWelcome to my site.\n")...)
@@ -68,7 +67,7 @@ func runInit(args []string) {
 		fmt.Println("pages/index.md already exists, skipping")
 	}
 
-	// Create template.html (do not overwrite if it already exists)
+	// Write template.html only if absent.
 	tmplPath := filepath.Join(siteDir, "template.html")
 	if _, err := os.Stat(tmplPath); os.IsNotExist(err) {
 		if err := os.WriteFile(tmplPath, []byte(theme.Template), 0644); err != nil {

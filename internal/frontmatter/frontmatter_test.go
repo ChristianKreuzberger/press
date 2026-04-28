@@ -290,6 +290,14 @@ func TestParseWeight(t *testing.T) {
 			content: "---\nweight: 999\ntitle: \"Heavy\"\n---\n",
 			want:    999,
 		},
+		{
+			// Quoted integer: the old implementation returned 0 because strconv.Atoi
+			// failed on `"7"`. The new implementation strips quotes via parseField,
+			// so weight: "7" correctly returns 7.
+			name:    "parses quoted integer",
+			content: "---\nweight: \"7\"\n---\n",
+			want:    7,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

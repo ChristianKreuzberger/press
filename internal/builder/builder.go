@@ -130,7 +130,7 @@ func buildRootNavRefs(pages []page.Page, sections []section.Section) []PageRef {
 		content, _ := os.ReadFile(p.Path)
 		weighted = append(weighted, weightedRef{
 			ref: PageRef{
-				Title: resolveTitleFromPath(p.Name, p.Path),
+				Title: resolveTitleFromContent(p.Name, content),
 				URL:   p.Name + ".html",
 			},
 			weight: frontmatter.ParseWeight(content),
@@ -140,25 +140,14 @@ func buildRootNavRefs(pages []page.Page, sections []section.Section) []PageRef {
 		content, _ := os.ReadFile(s.IndexPath)
 		weighted = append(weighted, weightedRef{
 			ref: PageRef{
-				Title: resolveTitleFromPath(s.Name, s.IndexPath),
+				Title: resolveTitleFromContent(s.Name, content),
 				URL:   s.Name + "/index.html",
 			},
 			weight: frontmatter.ParseWeight(content),
 		})
 	}
 	sort.SliceStable(weighted, func(i, j int) bool {
-		wi, wj := weighted[i].weight, weighted[j].weight
-		// weight=0 means unset; keep those after all weighted items.
-		if wi == 0 && wj == 0 {
-			return false
-		}
-		if wi == 0 {
-			return false
-		}
-		if wj == 0 {
-			return true
-		}
-		return wi < wj
+		return weightLess(weighted[i].weight, weighted[j].weight)
 	})
 	refs := make([]PageRef, len(weighted))
 	for i, w := range weighted {
@@ -235,19 +224,19 @@ func sortTOC(entries []TOCEntry, by, order string) {
 			return entries[i].UpdatedAt.Before(entries[j].UpdatedAt)
 		default: // "weight"
 			wi, wj := entries[i].Weight, entries[j].Weight
-			if wi == 0 && wj == 0 {
-				return false
-			}
-			if wi == 0 {
-				return false // unset always goes last
-			}
-			if wj == 0 {
-				return true // unset always goes last
-			}
 			if order == "desc" {
+				if wi == 0 && wj == 0 {
+					return false
+				}
+				if wi == 0 {
+					return false // unset always goes last
+				}
+				if wj == 0 {
+					return true // unset always goes last
+				}
 				return wj < wi
 			}
-			return wi < wj
+			return weightLess(wi, wj)
 		}
 	})
 }
@@ -296,13 +285,29 @@ func readTemplate(siteDir string) (string, error) {
 	return string(content), nil
 }
 
-func resolveTitleFromPath(name, path string) string {
-	content, err := os.ReadFile(path)
-	if err != nil {
-		return name
-	}
-	if t := markdown.ExtractTitle(string(content)); t != "" {
+// resolveTitleFromContent extracts the first Markdown heading from content as
+// the page title, falling back to name when no heading is found.
+func resolveTitleFromContent(name string, content []byte) string {
+	body := frontmatter.Strip(string(content))
+	if t := markdown.ExtractTitle(body); t != "" {
 		return t
 	}
 	return name
+}
+
+// weightLess reports whether wi sorts before wj in ascending weight order.
+// Items with weight 0 (unset) always sort last.
+// Do not use for descending order by swapping arguments — the zero-last
+// invariant breaks. Handle descending separately.
+func weightLess(wi, wj int) bool {
+	if wi == 0 && wj == 0 {
+		return false
+	}
+	if wi == 0 {
+		return false
+	}
+	if wj == 0 {
+		return true
+	}
+	return wi < wj
 }
