@@ -272,35 +272,49 @@ func TestUpdateMissingIndexMD(t *testing.T) {
 	}
 }
 
-
 func TestListPagesDraftField(t *testing.T) {
-dir := t.TempDir()
-if err := Create(dir, "blog", []byte("# Blog\n")); err != nil {
-t.Fatal(err)
-}
-blogDir := filepath.Join(dir, "pages", "blog")
-if err := os.WriteFile(filepath.Join(blogDir, "post.md"), []byte("# Post\n"), 0644); err != nil {
-t.Fatal(err)
-}
-if err := os.WriteFile(filepath.Join(blogDir, "wip.md"), []byte("---\ndraft: true\n---\n# WIP\n"), 0644); err != nil {
-t.Fatal(err)
-}
+	dir := t.TempDir()
+	if err := Create(dir, "blog", []byte("# Blog\n")); err != nil {
+		t.Fatal(err)
+	}
+	blogDir := filepath.Join(dir, "pages", "blog")
+	if err := os.WriteFile(filepath.Join(blogDir, "post.md"), []byte("# Post\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(blogDir, "wip.md"), []byte("---\ndraft: true\n---\n# WIP\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
 
-pages, err := ListPages(dir, "blog")
-if err != nil {
-t.Fatal(err)
-}
-byName := map[string]Page{}
-for _, p := range pages {
-byName[p.Name] = p
-}
-if byName["post"].Draft {
-t.Error("expected post to have Draft=false")
-}
-if !byName["wip"].Draft {
-t.Error("expected wip to have Draft=true")
-}
-if byName["index"].Draft {
-t.Error("expected index to have Draft=false")
-}
+	pages, err := ListPages(dir, "blog")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pages) != 3 {
+		t.Fatalf("expected 3 pages, got %d", len(pages))
+	}
+	byName := map[string]Page{}
+	for _, p := range pages {
+		byName[p.Name] = p
+	}
+	post, ok := byName["post"]
+	if !ok {
+		t.Fatal("expected post page to be returned")
+	}
+	if post.Draft {
+		t.Error("expected post to have Draft=false")
+	}
+	wip, ok := byName["wip"]
+	if !ok {
+		t.Fatal("expected wip page to be returned")
+	}
+	if !wip.Draft {
+		t.Error("expected wip to have Draft=true")
+	}
+	index, ok := byName["index"]
+	if !ok {
+		t.Fatal("expected index page to be returned")
+	}
+	if index.Draft {
+		t.Error("expected index to have Draft=false")
+	}
 }

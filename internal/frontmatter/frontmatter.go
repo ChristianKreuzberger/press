@@ -1,7 +1,9 @@
 package frontmatter
 
 import (
+	"bufio"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -80,6 +82,50 @@ func ParseTimeField(content []byte, field string) time.Time {
 // Returns false when the field is absent or set to any other value.
 func ParseDraft(content []byte) bool {
 	return parseField(content, "draft") == "true"
+}
+
+// ParseDraftFromFile opens the file at path and reads only the frontmatter
+// block (up to and including the closing "---" delimiter) to determine
+// whether "draft: true" is set. This avoids loading the full file into memory
+// when only the draft flag is needed.
+// Returns false (and no error) when the file has no frontmatter.
+func ParseDraftFromFile(path string) (bool, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return false, err
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+
+	// First line must be "---" to have frontmatter.
+	if !scanner.Scan() {
+		return false, scanner.Err()
+	}
+	if scanner.Text() != "---" {
+		return false, nil
+	}
+
+	draft := false
+	for scanner.Scan() {
+		line := scanner.Text()
+		if line == "---" {
+			// Reached the closing delimiter; return whatever we found.
+			return draft, nil
+		}
+		if !draft {
+			trimmed := strings.TrimSpace(line)
+			if strings.HasPrefix(trimmed, "draft:") {
+				val := strings.TrimSpace(strings.TrimPrefix(trimmed, "draft:"))
+				if len(val) >= 2 && val[0] == '"' && val[len(val)-1] == '"' {
+					val = val[1 : len(val)-1]
+				}
+				draft = val == "true"
+			}
+		}
+	}
+	// No closing delimiter found — treat as no frontmatter.
+	return false, scanner.Err()
 }
 
 // ParseWeight extracts the weight field value from YAML frontmatter.
