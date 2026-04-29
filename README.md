@@ -63,7 +63,7 @@ press serve
 | `press create section <name> [--file f.md]` | Create a new section (folder + `index.md`) |
 | `press update section <name> --file f.md` | Replace a section's index content |
 | `press delete section <name>` | Delete a section and all its pages |
-| `press build [-output dir]` | Build the site into `dist/` (default) |
+| `press build [--output dir] [--minify]` | Build the site into `dist/` (default); `--minify` reduces HTML file sizes |
 | `press serve [-port N] [-output dir]` | Build and serve the site locally; rebuilds on file changes |
 | `press tree` | Show a tree of all pages and sections |
 | `press --version` | Print the installed version |
