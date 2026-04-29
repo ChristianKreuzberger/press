@@ -797,4 +797,79 @@ func TestBuildUnreadablePage(t *testing.T) {
 	}
 }
 
+func TestBuildCopiesStaticAssets(t *testing.T) {
+	siteDir := t.TempDir()
+	outDir := filepath.Join(siteDir, "dist")
 
+	// Create a markdown page so the build has something to do.
+	if err := page.Create(siteDir, "index", []byte("# Home\n")); err != nil {
+		t.Fatal(err)
+	}
+
+	// Place a non-Markdown file directly under pages/.
+	pagesDir := filepath.Join(siteDir, "pages")
+	imgData := []byte{0x89, 0x50, 0x4E, 0x47} // PNG magic bytes
+	if err := os.WriteFile(filepath.Join(pagesDir, "logo.png"), imgData, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Place a non-Markdown file in a subdirectory under pages/.
+	assetsDir := filepath.Join(pagesDir, "assets")
+	if err := os.MkdirAll(assetsDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	cssData := []byte("body { margin: 0; }")
+	if err := os.WriteFile(filepath.Join(assetsDir, "style.css"), cssData, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Build(siteDir, outDir); err != nil {
+		t.Fatalf("Build failed: %v", err)
+	}
+
+	// Top-level asset should be copied.
+	got, err := os.ReadFile(filepath.Join(outDir, "logo.png"))
+	if err != nil {
+		t.Fatalf("expected dist/logo.png to exist: %v", err)
+	}
+	if string(got) != string(imgData) {
+		t.Errorf("dist/logo.png content mismatch")
+	}
+
+	// Subdirectory asset should be copied with directory preserved.
+	got, err = os.ReadFile(filepath.Join(outDir, "assets", "style.css"))
+	if err != nil {
+		t.Fatalf("expected dist/assets/style.css to exist: %v", err)
+	}
+	if string(got) != string(cssData) {
+		t.Errorf("dist/assets/style.css content mismatch")
+	}
+}
+
+func TestBuildCopiesStaticAssetsInSection(t *testing.T) {
+	siteDir := t.TempDir()
+	outDir := filepath.Join(siteDir, "dist")
+
+	if err := section.Create(siteDir, "portfolio", []byte("# Portfolio\n")); err != nil {
+		t.Fatal(err)
+	}
+
+	// Place an image inside the section directory.
+	sectionDir := filepath.Join(siteDir, "pages", "portfolio")
+	imgData := []byte("fake-image-data")
+	if err := os.WriteFile(filepath.Join(sectionDir, "photo.jpg"), imgData, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Build(siteDir, outDir); err != nil {
+		t.Fatalf("Build failed: %v", err)
+	}
+
+	got, err := os.ReadFile(filepath.Join(outDir, "portfolio", "photo.jpg"))
+	if err != nil {
+		t.Fatalf("expected dist/portfolio/photo.jpg to exist: %v", err)
+	}
+	if string(got) != string(imgData) {
+		t.Errorf("dist/portfolio/photo.jpg content mismatch")
+	}
+}
