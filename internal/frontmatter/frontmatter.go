@@ -75,6 +75,13 @@ func ParseTimeField(content []byte, field string) time.Time {
 	return t
 }
 
+// ParseDraft reports whether the frontmatter contains "draft: true".
+// Both unquoted (draft: true) and quoted (draft: "true") values are accepted.
+// Returns false when the field is absent or set to any other value.
+func ParseDraft(content []byte) bool {
+	return parseField(content, "draft") == "true"
+}
+
 // ParseWeight extracts the weight field value from YAML frontmatter.
 // Returns 0 if the field is absent, unparseable, or no frontmatter block is found.
 // Quoted integers (e.g. weight: "5") are accepted and return 5.

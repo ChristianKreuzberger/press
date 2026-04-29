@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/ChristianKreuzberger/press/internal/frontmatter"
 )
 
 const pagesDir = "pages"
@@ -22,8 +24,9 @@ var ErrPageNotFound = errors.New("page not found")
 
 // Page represents a single content page backed by a Markdown file.
 type Page struct {
-	Name string // file name without the .md extension
-	Path string // absolute path to the .md file
+	Name  string // file name without the .md extension
+	Path  string // absolute path to the .md file
+	Draft bool   // true when the page has draft: true in its frontmatter
 }
 
 // PagesDir returns the path to the pages directory within siteDir.
@@ -46,9 +49,12 @@ func List(siteDir string) ([]Page, error) {
 	for _, e := range entries {
 		if !e.IsDir() && strings.HasSuffix(e.Name(), ".md") {
 			name := strings.TrimSuffix(e.Name(), ".md")
+			path := filepath.Join(dir, e.Name())
+			content, _ := os.ReadFile(path)
 			pages = append(pages, Page{
-				Name: name,
-				Path: filepath.Join(dir, e.Name()),
+				Name:  name,
+				Path:  path,
+				Draft: frontmatter.ParseDraft(content),
 			})
 		}
 	}

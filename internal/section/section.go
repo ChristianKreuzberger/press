@@ -9,6 +9,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/ChristianKreuzberger/press/internal/frontmatter"
 )
 
 const pagesDir = "pages"
@@ -31,8 +33,9 @@ type Section struct {
 
 // Page represents a page within a section.
 type Page struct {
-	Name string // file name without the .md extension
-	Path string // absolute path to the .md file
+	Name  string // file name without the .md extension
+	Path  string // absolute path to the .md file
+	Draft bool   // true when the page has draft: true in its frontmatter
 }
 
 // validateName rejects names that are empty, equal to "." or "..", or that
@@ -157,9 +160,12 @@ func ListPages(siteDir, sectionName string) ([]Page, error) {
 	for _, e := range entries {
 		if !e.IsDir() && strings.HasSuffix(e.Name(), ".md") {
 			name := strings.TrimSuffix(e.Name(), ".md")
+			path := filepath.Join(dir, e.Name())
+			content, _ := os.ReadFile(path)
 			pages = append(pages, Page{
-				Name: name,
-				Path: filepath.Join(dir, e.Name()),
+				Name:  name,
+				Path:  path,
+				Draft: frontmatter.ParseDraft(content),
 			})
 		}
 	}

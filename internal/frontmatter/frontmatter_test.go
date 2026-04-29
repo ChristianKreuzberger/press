@@ -316,3 +316,45 @@ func TestParseStringField_UnclosedFrontmatter(t *testing.T) {
 		t.Errorf("expected empty string for unclosed frontmatter, got %q", got)
 	}
 }
+
+func TestParseDraft(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		want    bool
+	}{
+		{
+			name:    "draft true unquoted",
+			content: "---\ndraft: true\n---\n",
+			want:    true,
+		},
+		{
+			name:    "draft true quoted",
+			content: "---\ndraft: \"true\"\n---\n",
+			want:    true,
+		},
+		{
+			name:    "draft false unquoted",
+			content: "---\ndraft: false\n---\n",
+			want:    false,
+		},
+		{
+			name:    "draft absent",
+			content: "---\ntitle: \"Hello\"\n---\n",
+			want:    false,
+		},
+		{
+			name:    "no frontmatter",
+			content: "# Hello\n",
+			want:    false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ParseDraft([]byte(tt.content))
+			if got != tt.want {
+				t.Errorf("ParseDraft() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
