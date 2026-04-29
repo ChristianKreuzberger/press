@@ -50,7 +50,10 @@ func List(siteDir string) ([]Page, error) {
 		if !e.IsDir() && strings.HasSuffix(e.Name(), ".md") {
 			name := strings.TrimSuffix(e.Name(), ".md")
 			path := filepath.Join(dir, e.Name())
-			content, _ := os.ReadFile(path)
+			content, err := os.ReadFile(path)
+			if err != nil {
+				return nil, err
+			}
 			pages = append(pages, Page{
 				Name:  name,
 				Path:  path,
