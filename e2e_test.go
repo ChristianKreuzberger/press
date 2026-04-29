@@ -391,6 +391,78 @@ func TestE2ESectionTOC(t *testing.T) {
 }
 
 
+func TestE2ECheck(t *testing.T) {
+	siteDir := t.TempDir()
+	pagesDir := filepath.Join(siteDir, "pages")
+
+	// --- clean site after init should have no issues ---
+	run(t, siteDir, "init")
+
+	out := run(t, siteDir, "check")
+	if !strings.Contains(out, "pages checked") {
+		t.Errorf("check output should mention pages checked, got: %s", out)
+	}
+
+	// --- page with missing title in frontmatter ---
+	writeFile(t, filepath.Join(pagesDir, "no-title.md"), "---\ntitle: \"\"\n---\n# No Title\n\nContent here.\n")
+	out = runExpectError(t, siteDir, "check")
+	if !strings.Contains(out, "no-title.md: missing title") {
+		t.Errorf("check should report missing title, got: %s", out)
+	}
+	if err := os.Remove(filepath.Join(pagesDir, "no-title.md")); err != nil {
+		t.Fatal(err)
+	}
+
+	// --- page with empty content ---
+	writeFile(t, filepath.Join(pagesDir, "empty.md"), "---\ntitle: \"Empty\"\n---\n")
+	out = runExpectError(t, siteDir, "check")
+	if !strings.Contains(out, "empty.md: empty page content") {
+		t.Errorf("check should report empty page content, got: %s", out)
+	}
+	if err := os.Remove(filepath.Join(pagesDir, "empty.md")); err != nil {
+		t.Fatal(err)
+	}
+
+	// --- section directory without index.md ---
+	bareDir := filepath.Join(pagesDir, "bare")
+	if err := os.MkdirAll(bareDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	out = runExpectError(t, siteDir, "check")
+	if !strings.Contains(out, "bare/: section has no index.md") {
+		t.Errorf("check should report section without index.md, got: %s", out)
+	}
+	if err := os.RemoveAll(bareDir); err != nil {
+		t.Fatal(err)
+	}
+
+	// --- broken internal link ---
+	writeFile(t, filepath.Join(pagesDir, "with-link.md"), "---\ntitle: \"With Link\"\n---\n# With Link\n\nSee [team](/team) for more.\n")
+	out = runExpectError(t, siteDir, "check")
+	if !strings.Contains(out, "with-link.md: broken link → /team (page not found)") {
+		t.Errorf("check should report broken internal link, got: %s", out)
+	}
+
+	// Creating the linked page should fix the broken link.
+	writeFile(t, filepath.Join(pagesDir, "team.md"), "---\ntitle: \"Team\"\n---\n# Team\n\nMeet the team.\n")
+	out = run(t, siteDir, "check")
+	if strings.Contains(out, "broken link") {
+		t.Errorf("check should not report broken link after creating the target page, got: %s", out)
+	}
+
+	// --- exit code 0 when all clean ---
+	if err := os.Remove(filepath.Join(pagesDir, "with-link.md")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(pagesDir, "team.md")); err != nil {
+		t.Fatal(err)
+	}
+	out = run(t, siteDir, "check")
+	if strings.Contains(out, "issue(s) found") {
+		t.Errorf("check should report no issues on clean site, got: %s", out)
+	}
+}
+
 func TestE2ETree(t *testing.T) {
 	siteDir := t.TempDir()
 
