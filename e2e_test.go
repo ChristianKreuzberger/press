@@ -189,6 +189,32 @@ func TestE2E(t *testing.T) {
 		t.Fatal("build --output public should produce public/index.html")
 	}
 
+	// --- press build --minify ---
+	out = run(t, siteDir, "build", "--minify")
+	if !strings.Contains(out, "saved") {
+		t.Errorf("build --minify output should mention bytes saved, got: %s", out)
+	}
+	// Minified HTML should still contain required elements.
+	minifiedContent := readFile(t, indexHTML)
+	if !strings.Contains(minifiedContent, "<title>") {
+		t.Errorf("minified index.html should still contain <title>, got:\n%s", minifiedContent)
+	}
+	if !strings.Contains(minifiedContent, "Home Updated") {
+		t.Errorf("minified index.html should still contain page heading, got:\n%s", minifiedContent)
+	}
+	// Minified output should be smaller than non-minified.
+	normalInfo, err := os.Stat(filepath.Join(customOut, "index.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	minifiedInfo, err := os.Stat(indexHTML)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if minifiedInfo.Size() >= normalInfo.Size() {
+		t.Errorf("minified index.html (%d B) should be smaller than non-minified (%d B)", minifiedInfo.Size(), normalInfo.Size())
+	}
+
 	// --- press --version ---
 	cmd := exec.Command(pressBinary, "--version")
 	cmd.Dir = siteDir

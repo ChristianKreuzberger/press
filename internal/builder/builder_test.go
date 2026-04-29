@@ -873,3 +873,97 @@ func TestBuildCopiesStaticAssetsInSection(t *testing.T) {
 		t.Errorf("dist/portfolio/photo.jpg content mismatch")
 	}
 }
+
+func TestBuildWithOptionsMinifyProducesValidHTML(t *testing.T) {
+	siteDir := t.TempDir()
+	outDir := filepath.Join(siteDir, "dist")
+
+	if err := page.Create(siteDir, "index", []byte("# Home\n\nWelcome to press!\n")); err != nil {
+		t.Fatal(err)
+	}
+
+	stats, err := BuildWithOptions(siteDir, outDir, Options{Minify: true})
+	if err != nil {
+		t.Fatalf("BuildWithOptions failed: %v", err)
+	}
+
+	content, err := os.ReadFile(filepath.Join(outDir, "index.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	html := string(content)
+
+	if !strings.Contains(html, "<h1") || !strings.Contains(html, ">Home</h1>") {
+		t.Errorf("expected <h1>Home</h1> in minified output, got:\n%s", html)
+	}
+	if !strings.Contains(html, "<title>Home</title>") {
+		t.Errorf("expected <title>Home</title> in minified output, got:\n%s", html)
+	}
+	if !strings.Contains(html, "Welcome to press!") {
+		t.Errorf("expected body content in minified output, got:\n%s", html)
+	}
+
+	if stats.Pages != 1 {
+		t.Errorf("expected stats.Pages == 1, got %d", stats.Pages)
+	}
+}
+
+func TestBuildWithOptionsMinifyProducesSmallerOutput(t *testing.T) {
+	siteDir := t.TempDir()
+
+	if err := page.Create(siteDir, "index", []byte("# Home\n\nWelcome!\n")); err != nil {
+		t.Fatal(err)
+	}
+
+	outNormal := filepath.Join(siteDir, "dist-normal")
+	statsNormal, err := BuildWithOptions(siteDir, outNormal, Options{Minify: false})
+	if err != nil {
+		t.Fatalf("BuildWithOptions (normal) failed: %v", err)
+	}
+
+	outMinified := filepath.Join(siteDir, "dist-minified")
+	statsMinified, err := BuildWithOptions(siteDir, outMinified, Options{Minify: true})
+	if err != nil {
+		t.Fatalf("BuildWithOptions (minify) failed: %v", err)
+	}
+
+	if statsMinified.OutputSize >= statsNormal.OutputSize {
+		t.Errorf("expected minified output (%d B) to be smaller than normal output (%d B)",
+			statsMinified.OutputSize, statsNormal.OutputSize)
+	}
+}
+
+func TestBuildWithOptionsStatsPopulated(t *testing.T) {
+	siteDir := t.TempDir()
+	outDir := filepath.Join(siteDir, "dist")
+
+	if err := page.Create(siteDir, "index", []byte("# Home\n\nHello.\n")); err != nil {
+		t.Fatal(err)
+	}
+	if err := page.Create(siteDir, "about", []byte("# About\n\nMore.\n")); err != nil {
+		t.Fatal(err)
+	}
+
+	// Add a section with a page.
+	if err := section.Create(siteDir, "blog", []byte("# Blog\n")); err != nil {
+		t.Fatal(err)
+	}
+
+	stats, err := BuildWithOptions(siteDir, outDir, Options{})
+	if err != nil {
+		t.Fatalf("BuildWithOptions failed: %v", err)
+	}
+
+	// 2 top-level pages + 1 section index page = 3 pages total.
+	if stats.Pages != 3 {
+		t.Errorf("expected 3 pages, got %d", stats.Pages)
+	}
+	if stats.OutputSize <= 0 {
+		t.Errorf("expected OutputSize > 0, got %d", stats.OutputSize)
+	}
+	// Without minification, InputSize == OutputSize.
+	if stats.InputSize != stats.OutputSize {
+		t.Errorf("expected InputSize (%d) == OutputSize (%d) without minification",
+			stats.InputSize, stats.OutputSize)
+	}
+}

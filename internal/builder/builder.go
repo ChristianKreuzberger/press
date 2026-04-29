@@ -2,6 +2,7 @@
 package builder
 
 import (
+	"bytes"
 	"fmt"
 	"html/template"
 	"io"
@@ -13,10 +14,23 @@ import (
 
 	"github.com/ChristianKreuzberger/press/internal/frontmatter"
 	"github.com/ChristianKreuzberger/press/internal/markdown"
+	"github.com/ChristianKreuzberger/press/internal/minify"
 	"github.com/ChristianKreuzberger/press/internal/page"
 	"github.com/ChristianKreuzberger/press/internal/section"
 	"github.com/ChristianKreuzberger/press/internal/themes"
 )
+
+// Options controls optional build behavior.
+type Options struct {
+	Minify bool // minify HTML output to reduce file size
+}
+
+// Stats holds counters collected during a build.
+type Stats struct {
+	Pages      int   // number of HTML pages written
+	InputSize  int64 // total bytes of rendered HTML before minification
+	OutputSize int64 // total bytes written to output files
+}
 
 // DefaultTemplate is the HTML template used when template.html is not found.
 var DefaultTemplate = themes.Default().Template
@@ -49,24 +63,32 @@ type TemplateData struct {
 // Top-level pages (pages/*.md) are written to outputDir directly.
 // Section pages (pages/<section>/*.md) are written to outputDir/<section>/.
 func Build(siteDir, outputDir string) error {
+	_, err := BuildWithOptions(siteDir, outputDir, Options{})
+	return err
+}
+
+// BuildWithOptions is like Build but accepts Options and returns Stats.
+func BuildWithOptions(siteDir, outputDir string, opts Options) (Stats, error) {
+	var stats Stats
+
 	pages, err := page.List(siteDir)
 	if err != nil {
-		return fmt.Errorf("listing pages: %w", err)
+		return stats, fmt.Errorf("listing pages: %w", err)
 	}
 
 	sections, err := section.List(siteDir)
 	if err != nil {
-		return fmt.Errorf("listing sections: %w", err)
+		return stats, fmt.Errorf("listing sections: %w", err)
 	}
 
 	tmplContent, err := readTemplate(siteDir)
 	if err != nil {
-		return err
+		return stats, err
 	}
 
 	tmpl, err := template.New("page").Parse(tmplContent)
 	if err != nil {
-		return fmt.Errorf("parsing template: %w", err)
+		return stats, fmt.Errorf("parsing template: %w", err)
 	}
 
 	// rootNavRefs contains navigation entries with paths relative to the output root
@@ -76,30 +98,34 @@ func Build(siteDir, outputDir string) error {
 	rootNavRefs := buildRootNavRefs(pages, sections)
 
 	if err := os.MkdirAll(outputDir, 0755); err != nil {
-		return fmt.Errorf("creating output directory: %w", err)
+		return stats, fmt.Errorf("creating output directory: %w", err)
 	}
 
 	// Build top-level pages.
 	for _, p := range pages {
-		if err := buildPageFromPath(p.Name, p.Path, filepath.Join(outputDir, p.Name+".html"), rootNavRefs, nil, tmpl); err != nil {
-			return err
+		inputSize, outputSize, err := buildPageFromPath(p.Name, p.Path, filepath.Join(outputDir, p.Name+".html"), rootNavRefs, nil, tmpl, opts)
+		if err != nil {
+			return stats, err
 		}
+		stats.Pages++
+		stats.InputSize += inputSize
+		stats.OutputSize += outputSize
 	}
 
 	// Copy non-Markdown files from pages/ to outputDir.
 	if err := copyStaticAssets(siteDir, outputDir); err != nil {
-		return err
+		return stats, err
 	}
 
 	// Build section pages.
 	for _, s := range sections {
 		sectionPages, err := section.ListPages(siteDir, s.Name)
 		if err != nil {
-			return fmt.Errorf("listing pages in section %s: %w", s.Name, err)
+			return stats, fmt.Errorf("listing pages in section %s: %w", s.Name, err)
 		}
 		sectionOutDir := filepath.Join(outputDir, s.Name)
 		if err := os.MkdirAll(sectionOutDir, 0755); err != nil {
-			return fmt.Errorf("creating section output directory %s: %w", sectionOutDir, err)
+			return stats, fmt.Errorf("creating section output directory %s: %w", sectionOutDir, err)
 		}
 		// Build the TOC for this section's index page.
 		indexContent, _ := os.ReadFile(s.IndexPath)
@@ -112,12 +138,16 @@ func Build(siteDir, outputDir string) error {
 			if sp.Name == "index" {
 				pageTOC = toc
 			}
-			if err := buildPageFromPath(sp.Name, sp.Path, outPath, sectionNavRefs, pageTOC, tmpl); err != nil {
-				return err
+			inputSize, outputSize, err := buildPageFromPath(sp.Name, sp.Path, outPath, sectionNavRefs, pageTOC, tmpl, opts)
+			if err != nil {
+				return stats, err
 			}
+			stats.Pages++
+			stats.InputSize += inputSize
+			stats.OutputSize += outputSize
 		}
 	}
-	return nil
+	return stats, nil
 }
 
 // weightedRef pairs a PageRef with its navigation weight for sorting.
@@ -246,10 +276,10 @@ func sortTOC(entries []TOCEntry, by, order string) {
 	})
 }
 
-func buildPageFromPath(name, mdPath, outPath string, pageRefs []PageRef, toc []TOCEntry, tmpl *template.Template) error {
+func buildPageFromPath(name, mdPath, outPath string, pageRefs []PageRef, toc []TOCEntry, tmpl *template.Template, opts Options) (inputSize, outputSize int64, err error) {
 	mdContent, err := os.ReadFile(mdPath)
 	if err != nil {
-		return fmt.Errorf("reading page %s: %w", name, err)
+		return 0, 0, fmt.Errorf("reading page %s: %w", name, err)
 	}
 
 	mdStr := frontmatter.Strip(string(mdContent))
@@ -268,14 +298,45 @@ func buildPageFromPath(name, mdPath, outPath string, pageRefs []PageRef, toc []T
 
 	f, err := os.Create(outPath)
 	if err != nil {
-		return fmt.Errorf("creating output file %s: %w", outPath, err)
+		return 0, 0, fmt.Errorf("creating output file %s: %w", outPath, err)
 	}
 	defer f.Close()
 
-	if err := tmpl.Execute(f, data); err != nil {
-		return fmt.Errorf("executing template for page %s: %w", name, err)
+	if opts.Minify {
+		// Render to a buffer first so we can minify before writing.
+		var buf bytes.Buffer
+		if err := tmpl.Execute(&buf, data); err != nil {
+			return 0, 0, fmt.Errorf("executing template for page %s: %w", name, err)
+		}
+		inputSize = int64(buf.Len())
+		minified := minify.HTML(buf.String())
+		outputSize = int64(len(minified))
+		if _, err := io.WriteString(f, minified); err != nil {
+			return 0, 0, fmt.Errorf("writing output file %s: %w", outPath, err)
+		}
+	} else {
+		// Write directly to avoid an intermediate buffer allocation.
+		cw := &countingWriter{w: f}
+		if err := tmpl.Execute(cw, data); err != nil {
+			return 0, 0, fmt.Errorf("executing template for page %s: %w", name, err)
+		}
+		inputSize = int64(cw.n)
+		outputSize = inputSize
 	}
-	return nil
+
+	return inputSize, outputSize, nil
+}
+
+// countingWriter wraps an io.Writer and counts the bytes written.
+type countingWriter struct {
+	w io.Writer
+	n int
+}
+
+func (cw *countingWriter) Write(p []byte) (int, error) {
+	n, err := cw.w.Write(p)
+	cw.n += n
+	return n, err
 }
 
 // copyStaticAssets copies all non-Markdown files from the pages/ directory
