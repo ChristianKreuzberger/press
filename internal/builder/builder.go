@@ -4,6 +4,7 @@ package builder
 import (
 	"fmt"
 	"html/template"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -83,6 +84,11 @@ func Build(siteDir, outputDir string) error {
 		if err := buildPageFromPath(p.Name, p.Path, filepath.Join(outputDir, p.Name+".html"), rootNavRefs, nil, tmpl); err != nil {
 			return err
 		}
+	}
+
+	// Copy non-Markdown files from pages/ to outputDir.
+	if err := copyStaticAssets(siteDir, outputDir); err != nil {
+		return err
 	}
 
 	// Build section pages.
@@ -268,6 +274,55 @@ func buildPageFromPath(name, mdPath, outPath string, pageRefs []PageRef, toc []T
 
 	if err := tmpl.Execute(f, data); err != nil {
 		return fmt.Errorf("executing template for page %s: %w", name, err)
+	}
+	return nil
+}
+
+// copyStaticAssets copies all non-Markdown files from the pages/ directory
+// to the corresponding location in outputDir, preserving the directory structure.
+func copyStaticAssets(siteDir, outputDir string) error {
+	pagesDir := page.PagesDir(siteDir)
+	if _, err := os.Stat(pagesDir); os.IsNotExist(err) {
+		return nil
+	}
+	return filepath.WalkDir(pagesDir, func(src string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		if strings.HasSuffix(d.Name(), ".md") {
+			return nil
+		}
+		rel, err := filepath.Rel(pagesDir, src)
+		if err != nil {
+			return err
+		}
+		dst := filepath.Join(outputDir, rel)
+		if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
+			return fmt.Errorf("creating directory for asset %s: %w", rel, err)
+		}
+		return copyFile(src, dst)
+	})
+}
+
+// copyFile copies the file at src to dst.
+func copyFile(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return fmt.Errorf("opening asset %s: %w", src, err)
+	}
+	defer in.Close()
+
+	out, err := os.Create(dst)
+	if err != nil {
+		return fmt.Errorf("creating asset %s: %w", dst, err)
+	}
+	defer out.Close()
+
+	if _, err := io.Copy(out, in); err != nil {
+		return fmt.Errorf("copying asset %s: %w", dst, err)
 	}
 	return nil
 }
