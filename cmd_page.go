@@ -22,7 +22,11 @@ func runPageList(_ []string) {
 		return
 	}
 	for _, p := range pages {
-		fmt.Println(p.Name)
+		if p.Draft {
+			fmt.Println(p.Name + " [draft]")
+		} else {
+			fmt.Println(p.Name)
+		}
 	}
 }
 

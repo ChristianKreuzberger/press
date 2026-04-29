@@ -142,3 +142,31 @@ func TestDeletePathTraversal(t *testing.T) {
 	}
 }
 
+func TestListDraftField(t *testing.T) {
+	dir := t.TempDir()
+
+	if err := Create(dir, "normal", []byte("# Normal\n")); err != nil {
+		t.Fatal(err)
+	}
+	if err := Create(dir, "draft-page", []byte("---\ndraft: true\n---\n# Draft\n")); err != nil {
+		t.Fatal(err)
+	}
+
+	pages, err := List(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pages) != 2 {
+		t.Fatalf("expected 2 pages, got %d", len(pages))
+	}
+	byName := map[string]Page{}
+	for _, p := range pages {
+		byName[p.Name] = p
+	}
+	if byName["normal"].Draft {
+		t.Error("expected normal page to have Draft=false")
+	}
+	if !byName["draft-page"].Draft {
+		t.Error("expected draft-page to have Draft=true")
+	}
+}
