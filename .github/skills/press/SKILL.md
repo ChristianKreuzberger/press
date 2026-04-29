@@ -1,7 +1,7 @@
 ---
 name: press
-description: "Install and use the press static site generator CLI. Use when: setting up a new press site, creating pages or sections, building or serving a site, managing content with press commands, understanding press project layout or frontmatter fields."
-argument-hint: "What do you want to do? (e.g. install press, create a page, build the site)"
+description: "Install and use the press static site generator CLI. Use when: setting up a new press site, creating pages or sections, building or serving a site, managing content with press commands, understanding press project layout or frontmatter fields, choosing or customising a theme, using Markdown extensions like YouTube embeds."
+argument-hint: "What do you want to do? (e.g. install press, create a page, build the site, pick a theme)"
 ---
 
 # press Usage
@@ -14,6 +14,8 @@ argument-hint: "What do you want to do? (e.g. install press, create a page, buil
 - Creating, updating, or deleting pages and sections
 - Building or locally serving a press site
 - Understanding the project layout or frontmatter fields
+- Choosing or switching built-in themes
+- Using Markdown extensions (YouTube embeds, tables, footnotes, etc.)
 - Scripting or automating press as part of a pipeline
 
 ## Installation
@@ -65,9 +67,9 @@ press build
 
 | Command | Description |
 |---------|-------------|
-| `press init [dir]` | Scaffold a new site (`template.html` + `pages/`) |
+| `press init [dir] [--theme name]` | Scaffold a new site (`template.html` + `pages/`); choose a built-in theme |
 | `press list page` | List all pages |
-| `press create page <name> [--file f.md]` | Create a page; `name` may include sections (e.g. `blog/my-post`) |
+| `press create page <name> [--file f.md]` | Create a page; `name` may include sections (e.g. `blog/my-post`, `blog/2026/my-post`) |
 | `press update page <name> --file f.md` | Replace a page's content |
 | `press delete page <name>` | Delete a page |
 | `press list section` | List all sections |
@@ -207,6 +209,51 @@ The `template.html` file receives the following variables:
 ```
 
 The default template already renders this block automatically after `.Content`.
+
+---
+
+## Themes
+
+press ships three built-in themes. Choose one when scaffolding a new site:
+
+```bash
+press init --theme dark      # default — GitHub-inspired dark mode
+press init --theme light     # clean editorial style with serif headings
+press init --theme terminal  # retro green-on-black, all monospace
+```
+
+If `--theme` is omitted, `dark` is used. You can also fall back later:
+
+```bash
+press init /tmp/theme-preview --theme light
+cp /tmp/theme-preview/template.html ./template.html
+```
+
+`template.html` is a standard Go `html/template` file — edit it freely or replace it with your own design.
+
+---
+
+## Markdown Extensions
+
+press supports standard GitHub-Flavored Markdown (GFM) plus a few extras.
+
+### GFM features included
+
+- **Tables** — pipe-delimited tables
+- **Task lists** — `- [ ] item` / `- [x] item`
+- **Strikethrough** — `~~text~~`
+- **Definition lists**
+- **Footnotes** — `[^1]` references
+
+### YouTube embed
+
+Place `!youtube[VIDEO_ID]` on its own line to embed a responsive player:
+
+```markdown
+!youtube[dQw4w9WgXcQ]
+```
+
+The `VIDEO_ID` is the 11-character identifier from the YouTube URL. Renders as a privacy-enhanced `youtube-nocookie.com` iframe at 16:9. The shortcode is left as-is inside fenced code blocks or inline code spans.
 
 ---
 
