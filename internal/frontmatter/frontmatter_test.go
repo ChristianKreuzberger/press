@@ -422,3 +422,69 @@ func TestParseDraftFromFile_NotFound(t *testing.T) {
 		t.Error("expected error for non-existent file, got nil")
 	}
 }
+
+func TestHumanize(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"about-us", "About Us"},
+		{"my_cool_page", "My Cool Page"},
+		{"blog", "Blog"},
+		{"my-blog-post", "My Blog Post"},
+		{"section_one_two", "Section One Two"},
+		{"UPPER", "Upper"},
+		{"mixed-Case_word", "Mixed Case Word"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			got := Humanize(tt.input)
+			if got != tt.want {
+				t.Errorf("Humanize(%q) = %q; want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestSetField(t *testing.T) {
+	t.Run("updates title", func(t *testing.T) {
+		content := "---\ntitle: \"Old Title\"\nupdated_at: \"2026-01-01T00:00:00Z\"\n---\n# Body\n"
+		got, err := SetField([]byte(content), "title", "New Title")
+		if err != nil {
+			t.Fatalf("SetField() error: %v", err)
+		}
+		if !strings.Contains(string(got), `title: "New Title"`) {
+			t.Errorf("expected updated title, got: %s", got)
+		}
+		if !strings.Contains(string(got), "# Body\n") {
+			t.Errorf("expected body preserved, got: %s", got)
+		}
+	})
+
+	t.Run("updates updated_at", func(t *testing.T) {
+		content := "---\ntitle: \"Page\"\nupdated_at: \"2026-01-01T00:00:00Z\"\n---\n"
+		got, err := SetField([]byte(content), "updated_at", "2027-06-15T12:00:00Z")
+		if err != nil {
+			t.Fatalf("SetField() error: %v", err)
+		}
+		if !strings.Contains(string(got), `updated_at: "2027-06-15T12:00:00Z"`) {
+			t.Errorf("expected updated timestamp, got: %s", got)
+		}
+	})
+
+	t.Run("error when no frontmatter", func(t *testing.T) {
+		content := "# Hello\n"
+		_, err := SetField([]byte(content), "title", "New")
+		if err == nil {
+			t.Error("expected error for content without frontmatter, got nil")
+		}
+	})
+
+	t.Run("error when field absent", func(t *testing.T) {
+		content := "---\ntitle: \"Page\"\n---\n"
+		_, err := SetField([]byte(content), "updated_at", "2027-01-01T00:00:00Z")
+		if err == nil {
+			t.Error("expected error when field is absent, got nil")
+		}
+	})
+}

@@ -4,7 +4,9 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestListEmpty(t *testing.T) {
@@ -168,5 +170,56 @@ func TestListDraftField(t *testing.T) {
 	}
 	if !byName["draft-page"].Draft {
 		t.Error("expected draft-page to have Draft=true")
+	}
+}
+
+func TestRename(t *testing.T) {
+	dir := t.TempDir()
+	content := []byte("---\ntitle: \"About\"\nalias: \"\"\ntags: []\nweight: 0\ncreated_at: \"2026-01-01T00:00:00Z\"\nupdated_at: \"2026-01-01T00:00:00Z\"\n---\n# About\n")
+	if err := Create(dir, "about", content); err != nil {
+		t.Fatal(err)
+	}
+	newNow := time.Date(2027, 6, 15, 12, 0, 0, 0, time.UTC)
+	if err := Rename(dir, "about", "about-us", newNow); err != nil {
+		t.Fatalf("Rename() error: %v", err)
+	}
+	// Old file should be gone.
+	if _, err := os.Stat(filepath.Join(PagesDir(dir), "about.md")); err == nil {
+		t.Error("expected old file to be removed")
+	}
+	// New file should exist with updated frontmatter.
+	newContent, err := os.ReadFile(filepath.Join(PagesDir(dir), "about-us.md"))
+	if err != nil {
+		t.Fatalf("expected new file to exist: %v", err)
+	}
+	s := string(newContent)
+	if !strings.Contains(s, `title: "About Us"`) {
+		t.Errorf("expected updated title in frontmatter, got: %s", s)
+	}
+	if !strings.Contains(s, newNow.UTC().Format(time.RFC3339)) {
+		t.Errorf("expected updated_at = %s in frontmatter, got: %s", newNow.UTC().Format(time.RFC3339), s)
+	}
+}
+
+func TestRenameNotFound(t *testing.T) {
+	dir := t.TempDir()
+	err := Rename(dir, "missing", "new-name", time.Now())
+	if !errors.Is(err, ErrPageNotFound) {
+		t.Errorf("expected ErrPageNotFound, got %v", err)
+	}
+}
+
+func TestRenameTargetExists(t *testing.T) {
+	dir := t.TempDir()
+	content := []byte("---\ntitle: \"About\"\nalias: \"\"\ntags: []\nweight: 0\ncreated_at: \"2026-01-01T00:00:00Z\"\nupdated_at: \"2026-01-01T00:00:00Z\"\n---\n# About\n")
+	if err := Create(dir, "about", content); err != nil {
+		t.Fatal(err)
+	}
+	if err := Create(dir, "contact", content); err != nil {
+		t.Fatal(err)
+	}
+	err := Rename(dir, "about", "contact", time.Now())
+	if !errors.Is(err, ErrPageExists) {
+		t.Errorf("expected ErrPageExists, got %v", err)
 	}
 }

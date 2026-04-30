@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 )
 
 // Generate returns YAML frontmatter bytes for a new markdown file.
@@ -141,6 +142,67 @@ func ParseWeight(content []byte) int {
 		return 0
 	}
 	return n
+}
+
+// Humanize converts a slug-style name to a human-readable title.
+// Hyphens and underscores are replaced with spaces, and each word is title-cased.
+func Humanize(name string) string {
+	r := strings.NewReplacer("-", " ", "_", " ")
+	words := strings.Fields(r.Replace(name))
+	for i, w := range words {
+		runes := []rune(w)
+		if len(runes) == 0 {
+			continue
+		}
+		runes[0] = unicode.ToUpper(runes[0])
+		for j := 1; j < len(runes); j++ {
+			runes[j] = unicode.ToLower(runes[j])
+		}
+		words[i] = string(runes)
+	}
+	return strings.Join(words, " ")
+}
+
+// SetField updates the value of a named field in the YAML frontmatter block.
+// The field must already exist in the frontmatter; the new value is written as
+// a double-quoted string. Returns an error if there is no frontmatter or the
+// field is absent.
+func SetField(content []byte, field, value string) ([]byte, error) {
+	s := string(content)
+	const delim = "---"
+	if !strings.HasPrefix(s, delim+"\n") {
+		return nil, fmt.Errorf("frontmatter: no frontmatter block found")
+	}
+	// Find the closing delimiter.
+	rest := s[len(delim)+1:]
+	end := strings.Index(rest, "\n"+delim)
+	if end == -1 {
+		return nil, fmt.Errorf("frontmatter: no closing delimiter found")
+	}
+	block := rest[:end]
+	after := rest[end:] // starts with "\n---"
+
+	prefix := field + ":"
+	found := false
+	var b strings.Builder
+	for _, line := range strings.Split(block, "\n") {
+		trimmedLeft := strings.TrimLeft(line, " \t")
+		if !found && strings.HasPrefix(trimmedLeft, prefix) {
+			// Preserve any leading whitespace from the original line.
+			leading := line[:len(line)-len(trimmedLeft)]
+			b.WriteString(leading + field + ": " + strconv.Quote(value) + "\n")
+			found = true
+			continue
+		}
+		b.WriteString(line + "\n")
+	}
+	if !found {
+		return nil, fmt.Errorf("frontmatter: field %q not found", field)
+	}
+	// b ends with "\n" from the last line; after starts with "\n---"
+	// Reconstruct: opening delimiter + block lines + closing section
+	result := delim + "\n" + b.String() + after
+	return []byte(result), nil
 }
 
 // Strip removes YAML frontmatter from the beginning of a markdown document.

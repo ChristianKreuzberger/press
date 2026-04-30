@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/ChristianKreuzberger/press/internal/frontmatter"
 )
@@ -139,6 +140,45 @@ func Update(siteDir, name string, content []byte) error {
 		return fmt.Errorf("%w: %q", ErrSectionNotFound, name)
 	}
 	return os.WriteFile(indexPath, content, 0644)
+}
+
+// Rename renames the section from oldName to newName.
+// It updates the title and updated_at in the section's index.md.
+func Rename(siteDir, oldName, newName string, now time.Time) error {
+	if err := validateName(oldName); err != nil {
+		return err
+	}
+	if err := validateName(newName); err != nil {
+		return err
+	}
+
+	oldDir := sectionDir(siteDir, oldName)
+	newDir := sectionDir(siteDir, newName)
+
+	if _, err := os.Stat(oldDir); os.IsNotExist(err) {
+		return fmt.Errorf("%w: %q", ErrSectionNotFound, oldName)
+	}
+	if _, err := os.Stat(newDir); err == nil {
+		return fmt.Errorf("%w: %q", ErrSectionExists, newName)
+	}
+
+	indexPath := filepath.Join(oldDir, "index.md")
+	content, err := os.ReadFile(indexPath)
+	if err != nil {
+		return err
+	}
+	content, err = frontmatter.SetField(content, "title", frontmatter.Humanize(newName))
+	if err != nil {
+		return fmt.Errorf("rename section: %w", err)
+	}
+	content, err = frontmatter.SetField(content, "updated_at", now.UTC().Format(time.RFC3339))
+	if err != nil {
+		return fmt.Errorf("rename section: %w", err)
+	}
+	if err := os.Rename(oldDir, newDir); err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(newDir, "index.md"), content, 0644)
 }
 
 // ListPages returns all pages found inside a section directory, including index.md.

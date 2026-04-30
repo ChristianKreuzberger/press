@@ -63,6 +63,8 @@ press serve
 | `press create section <name> [--file f.md]` | Create a new section (folder + `index.md`) |
 | `press update section <name> --file f.md` | Replace a section's index content |
 | `press delete section <name>` | Delete a section and all its pages |
+| `press rename page <old> <new>` | Rename a page; updates title and `updated_at` in frontmatter |
+| `press rename section <old> <new>` | Rename a section; updates title and `updated_at` in its `index.md` |
 | `press build [-output dir]` | Build the site into `dist/` (default); draft pages are skipped |
 | `press build --drafts [-output dir]` | Build including draft pages |
 | `press serve [-port N] [-output dir]` | Build and serve the site locally; rebuilds on file changes |
