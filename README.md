@@ -63,9 +63,11 @@ press serve
 | `press create section <name> [--file f.md]` | Create a new section (folder + `index.md`) |
 | `press update section <name> --file f.md` | Replace a section's index content |
 | `press delete section <name>` | Delete a section and all its pages |
-| `press build [-output dir]` | Build the site into `dist/` (default) |
+| `press build [-output dir]` | Build the site into `dist/` (default); draft pages are skipped |
+| `press build --drafts [-output dir]` | Build including draft pages |
 | `press serve [-port N] [-output dir]` | Build and serve the site locally; rebuilds on file changes |
-| `press tree` | Show a tree of all pages and sections |
+| `press serve --drafts` | Serve including draft pages |
+| `press tree` | Show a tree of all pages and sections; draft pages are marked `[draft]` |
 | `press check` | Validate pages and internal links; exits with code 1 if issues are found |
 | `press --version` | Print the installed version |
 
@@ -145,6 +147,7 @@ updated_at: "2026-04-22T10:00:00Z"
 | `alias` | string | Alternative URL slug (reserved for future use) |
 | `tags` | list | Content tags (reserved for future use) |
 | `weight` | integer | Controls the order of pages and sections in navigation. Lower values appear first. A value of `0` (default) means the item is sorted after all weighted items, in filesystem order. |
+| `draft` | boolean | When `true`, the page is excluded from `press build` by default. Use `press build --drafts` or `press serve --drafts` to include it. Draft pages are shown with a `[draft]` marker in `press tree` and `press list page`. |
 | `created_at` | RFC 3339 | Creation timestamp |
 | `updated_at` | RFC 3339 | Last-updated timestamp |
 

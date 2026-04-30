@@ -1,6 +1,8 @@
 package frontmatter
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -314,5 +316,109 @@ func TestParseStringField_UnclosedFrontmatter(t *testing.T) {
 	got := ParseStringField([]byte(content), "title")
 	if got != "" {
 		t.Errorf("expected empty string for unclosed frontmatter, got %q", got)
+	}
+}
+
+func TestParseDraft(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		want    bool
+	}{
+		{
+			name:    "draft true unquoted",
+			content: "---\ndraft: true\n---\n",
+			want:    true,
+		},
+		{
+			name:    "draft true quoted",
+			content: "---\ndraft: \"true\"\n---\n",
+			want:    true,
+		},
+		{
+			name:    "draft false unquoted",
+			content: "---\ndraft: false\n---\n",
+			want:    false,
+		},
+		{
+			name:    "draft absent",
+			content: "---\ntitle: \"Hello\"\n---\n",
+			want:    false,
+		},
+		{
+			name:    "no frontmatter",
+			content: "# Hello\n",
+			want:    false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ParseDraft([]byte(tt.content))
+			if got != tt.want {
+				t.Errorf("ParseDraft() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestParseDraftFromFile(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		want    bool
+	}{
+		{
+			name:    "draft true unquoted",
+			content: "---\ndraft: true\n---\n# Page\n\nLong body that should not be read.\n",
+			want:    true,
+		},
+		{
+			name:    "draft true quoted",
+			content: "---\ndraft: \"true\"\n---\n",
+			want:    true,
+		},
+		{
+			name:    "draft false",
+			content: "---\ndraft: false\n---\n",
+			want:    false,
+		},
+		{
+			name:    "draft absent",
+			content: "---\ntitle: \"Hello\"\n---\n",
+			want:    false,
+		},
+		{
+			name:    "no frontmatter",
+			content: "# Hello\n",
+			want:    false,
+		},
+		{
+			name:    "unclosed frontmatter",
+			content: "---\ndraft: true\n",
+			want:    false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, "page.md")
+			if err := os.WriteFile(path, []byte(tt.content), 0644); err != nil {
+				t.Fatal(err)
+			}
+			got, err := ParseDraftFromFile(path)
+			if err != nil {
+				t.Fatalf("ParseDraftFromFile() error: %v", err)
+			}
+			if got != tt.want {
+				t.Errorf("ParseDraftFromFile() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestParseDraftFromFile_NotFound(t *testing.T) {
+	_, err := ParseDraftFromFile("/nonexistent/path/page.md")
+	if err == nil {
+		t.Error("expected error for non-existent file, got nil")
 	}
 }

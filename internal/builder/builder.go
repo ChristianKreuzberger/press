@@ -48,7 +48,8 @@ type TemplateData struct {
 // It reads template.html from siteDir; if absent it falls back to DefaultTemplate.
 // Top-level pages (pages/*.md) are written to outputDir directly.
 // Section pages (pages/<section>/*.md) are written to outputDir/<section>/.
-func Build(siteDir, outputDir string) error {
+// When includeDrafts is false, pages with draft: true in their frontmatter are skipped.
+func Build(siteDir, outputDir string, includeDrafts bool) error {
 	pages, err := page.List(siteDir)
 	if err != nil {
 		return fmt.Errorf("listing pages: %w", err)
@@ -73,7 +74,10 @@ func Build(siteDir, outputDir string) error {
 	// (e.g. "about.html", "blog/index.html"). These are used as-is for top-level pages,
 	// and prefixed with "../" for pages that live one level deep inside a section
 	// directory.
-	rootNavRefs := buildRootNavRefs(pages, sections)
+	rootNavRefs, err := buildRootNavRefs(pages, sections, includeDrafts)
+	if err != nil {
+		return fmt.Errorf("building nav refs: %w", err)
+	}
 
 	if err := os.MkdirAll(outputDir, 0755); err != nil {
 		return fmt.Errorf("creating output directory: %w", err)
@@ -81,6 +85,9 @@ func Build(siteDir, outputDir string) error {
 
 	// Build top-level pages.
 	for _, p := range pages {
+		if !includeDrafts && p.Draft {
+			continue
+		}
 		if err := buildPageFromPath(p.Name, p.Path, filepath.Join(outputDir, p.Name+".html"), rootNavRefs, nil, tmpl); err != nil {
 			return err
 		}
@@ -93,6 +100,15 @@ func Build(siteDir, outputDir string) error {
 
 	// Build section pages.
 	for _, s := range sections {
+		// Read the section index up front so we can check its draft status.
+		indexContent, err := os.ReadFile(s.IndexPath)
+		if err != nil {
+			return fmt.Errorf("reading section index %s: %w", s.IndexPath, err)
+		}
+		// Skip the entire section when its index.md is a draft and drafts are excluded.
+		if !includeDrafts && frontmatter.ParseDraft(indexContent) {
+			continue
+		}
 		sectionPages, err := section.ListPages(siteDir, s.Name)
 		if err != nil {
 			return fmt.Errorf("listing pages in section %s: %w", s.Name, err)
@@ -102,11 +118,13 @@ func Build(siteDir, outputDir string) error {
 			return fmt.Errorf("creating section output directory %s: %w", sectionOutDir, err)
 		}
 		// Build the TOC for this section's index page.
-		indexContent, _ := os.ReadFile(s.IndexPath)
-		toc := buildSectionTOC(sectionPages, indexContent)
+		toc := buildSectionTOC(sectionPages, indexContent, includeDrafts)
 		// Section pages are one level deep, so prefix top-level nav URLs with "../".
 		sectionNavRefs := prefixNavRefs(rootNavRefs, "../")
 		for _, sp := range sectionPages {
+			if !includeDrafts && sp.Draft {
+				continue
+			}
 			outPath := filepath.Join(sectionOutDir, sp.Name+".html")
 			var pageTOC []TOCEntry
 			if sp.Name == "index" {
@@ -130,10 +148,17 @@ type weightedRef struct {
 // Top-level pages link to "<name>.html"; sections link to "<section>/index.html".
 // Entries are sorted by ascending weight; entries with weight=0 (unset) appear last
 // in their original filesystem order (stable sort).
-func buildRootNavRefs(pages []page.Page, sections []section.Section) []PageRef {
+// When includeDrafts is false, draft pages and draft sections are excluded from navigation.
+func buildRootNavRefs(pages []page.Page, sections []section.Section, includeDrafts bool) ([]PageRef, error) {
 	weighted := make([]weightedRef, 0, len(pages)+len(sections))
 	for _, p := range pages {
-		content, _ := os.ReadFile(p.Path)
+		if !includeDrafts && p.Draft {
+			continue
+		}
+		content, err := os.ReadFile(p.Path)
+		if err != nil {
+			return nil, fmt.Errorf("reading page %s: %w", p.Path, err)
+		}
 		weighted = append(weighted, weightedRef{
 			ref: PageRef{
 				Title: resolveTitleFromContent(p.Name, content),
@@ -143,7 +168,13 @@ func buildRootNavRefs(pages []page.Page, sections []section.Section) []PageRef {
 		})
 	}
 	for _, s := range sections {
-		content, _ := os.ReadFile(s.IndexPath)
+		content, err := os.ReadFile(s.IndexPath)
+		if err != nil {
+			return nil, fmt.Errorf("reading section index %s: %w", s.IndexPath, err)
+		}
+		if !includeDrafts && frontmatter.ParseDraft(content) {
+			continue
+		}
 		weighted = append(weighted, weightedRef{
 			ref: PageRef{
 				Title: resolveTitleFromContent(s.Name, content),
@@ -159,7 +190,7 @@ func buildRootNavRefs(pages []page.Page, sections []section.Section) []PageRef {
 	for i, w := range weighted {
 		refs[i] = w.ref
 	}
-	return refs
+	return refs, nil
 }
 
 // prefixNavRefs returns a copy of refs with each URL prefixed by prefix.
@@ -173,7 +204,8 @@ func prefixNavRefs(refs []PageRef, prefix string) []PageRef {
 
 // buildSectionTOC collects TOC entries for all non-index pages in the section,
 // sorted according to the toc_sort and toc_order fields in indexContent.
-func buildSectionTOC(pages []section.Page, indexContent []byte) []TOCEntry {
+// When includeDrafts is false, draft pages are excluded from the TOC.
+func buildSectionTOC(pages []section.Page, indexContent []byte, includeDrafts bool) []TOCEntry {
 	tocSort := frontmatter.ParseStringField(indexContent, "toc_sort")
 	tocOrder := frontmatter.ParseStringField(indexContent, "toc_order")
 	if tocSort == "" {
@@ -188,7 +220,17 @@ func buildSectionTOC(pages []section.Page, indexContent []byte) []TOCEntry {
 		if p.Name == "index" {
 			continue
 		}
-		content, _ := os.ReadFile(p.Path)
+		if !includeDrafts && p.Draft {
+			continue
+		}
+		content, err := os.ReadFile(p.Path)
+		if err != nil {
+			entries = append(entries, TOCEntry{
+				Title: p.Name,
+				URL:   p.Name + ".html",
+			})
+			continue
+		}
 		body := frontmatter.Strip(string(content))
 		title := markdown.ExtractTitle(body)
 		if title == "" {

@@ -546,3 +546,74 @@ func TestE2ETree(t *testing.T) {
 		t.Errorf("tree should show 'first-post' under blog, got: %s", out)
 	}
 }
+
+func TestE2EDraft(t *testing.T) {
+	siteDir := t.TempDir()
+	run(t, siteDir, "init")
+
+	// Create a draft top-level page.
+	draftMD := filepath.Join(t.TempDir(), "wip.md")
+	writeFile(t, draftMD, "---\ndraft: true\n---\n# WIP\n\nWork in progress.\n")
+	run(t, siteDir, "create", "page", "wip", "--file", draftMD)
+
+	// Create a section with a draft page.
+	run(t, siteDir, "create", "section", "blog")
+	blogDir := filepath.Join(siteDir, "pages", "blog")
+	writeFile(t, filepath.Join(blogDir, "published.md"), "# Published\n\nDone.\n")
+	writeFile(t, filepath.Join(blogDir, "wip-post.md"), "---\ndraft: true\n---\n# WIP Post\n\nNot done.\n")
+
+	// --- press list page: shows [draft] marker ---
+	out := run(t, siteDir, "list", "page")
+	if !strings.Contains(out, "wip [draft]") {
+		t.Errorf("list page should show 'wip [draft]', got: %s", out)
+	}
+	if strings.Contains(out, "index [draft]") {
+		t.Errorf("list page should not mark index as draft, got: %s", out)
+	}
+
+	// --- press tree: shows [draft] marker ---
+	out = run(t, siteDir, "tree")
+	if !strings.Contains(out, "wip [draft]") {
+		t.Errorf("tree should show 'wip [draft]', got: %s", out)
+	}
+	if !strings.Contains(out, "wip-post [draft]") {
+		t.Errorf("tree should show 'wip-post [draft]' under blog, got: %s", out)
+	}
+	if !strings.Contains(out, "published") {
+		t.Errorf("tree should show 'published' under blog, got: %s", out)
+	}
+
+	// --- press build (default): skips draft pages ---
+	run(t, siteDir, "build")
+	distDir := filepath.Join(siteDir, "dist")
+
+	if _, err := os.Stat(filepath.Join(distDir, "index.html")); err != nil {
+		t.Error("build should produce dist/index.html")
+	}
+	if _, err := os.Stat(filepath.Join(distDir, "wip.html")); err == nil {
+		t.Error("build should skip dist/wip.html (draft)")
+	}
+	if _, err := os.Stat(filepath.Join(distDir, "blog", "published.html")); err != nil {
+		t.Error("build should produce dist/blog/published.html")
+	}
+	if _, err := os.Stat(filepath.Join(distDir, "blog", "wip-post.html")); err == nil {
+		t.Error("build should skip dist/blog/wip-post.html (draft)")
+	}
+
+	// Draft page should not appear in navigation.
+	indexContent := readFile(t, filepath.Join(distDir, "index.html"))
+	if strings.Contains(indexContent, "wip.html") {
+		t.Error("index.html navigation should not include draft wip.html")
+	}
+
+	// --- press build --drafts: includes draft pages ---
+	run(t, siteDir, "build", "--output", "dist-drafts", "--drafts")
+	draftsDist := filepath.Join(siteDir, "dist-drafts")
+
+	if _, err := os.Stat(filepath.Join(draftsDist, "wip.html")); err != nil {
+		t.Error("build --drafts should produce dist-drafts/wip.html")
+	}
+	if _, err := os.Stat(filepath.Join(draftsDist, "blog", "wip-post.html")); err != nil {
+		t.Error("build --drafts should produce dist-drafts/blog/wip-post.html")
+	}
+}
