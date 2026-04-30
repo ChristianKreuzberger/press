@@ -390,7 +390,6 @@ func TestE2ESectionTOC(t *testing.T) {
 	}
 }
 
-
 func TestE2ETree(t *testing.T) {
 	siteDir := t.TempDir()
 
