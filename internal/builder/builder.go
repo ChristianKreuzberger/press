@@ -49,8 +49,11 @@ type TemplateData struct {
 // Top-level pages (pages/*.md) are written to outputDir directly.
 // Section pages (pages/<section>/*.md) are written to outputDir/<section>/.
 // When includeDrafts is false, pages with draft: true in their frontmatter are skipped.
+// staticDir names a directory relative to siteDir whose contents are copied verbatim
+// into outputDir preserving directory structure; if it does not exist it is silently
+// skipped.
 // It returns the list of absolute paths of HTML files that were written.
-func Build(siteDir, outputDir string, includeDrafts bool) ([]string, error) {
+func Build(siteDir, outputDir string, includeDrafts bool, staticDir string) ([]string, error) {
 	outputDir, err := filepath.Abs(outputDir)
 	if err != nil {
 		return nil, fmt.Errorf("resolving output dir: %w", err)
@@ -105,6 +108,11 @@ func Build(siteDir, outputDir string, includeDrafts bool) ([]string, error) {
 
 	// Copy non-Markdown files from pages/ to outputDir.
 	if err := copyStaticAssets(siteDir, outputDir); err != nil {
+		return nil, err
+	}
+
+	// Copy the static directory verbatim into the output directory.
+	if err := copyStaticDir(siteDir, outputDir, staticDir); err != nil {
 		return nil, err
 	}
 
@@ -355,6 +363,38 @@ func copyStaticAssets(siteDir, outputDir string) error {
 		dst := filepath.Join(outputDir, rel)
 		if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
 			return fmt.Errorf("creating directory for asset %s: %w", rel, err)
+		}
+		return copyFile(src, dst)
+	})
+}
+
+// copyStaticDir copies all files from the directory named staticDirName inside
+// siteDir into a same-named subdirectory of outputDir, preserving the directory
+// structure.  If the source directory does not exist the function returns nil
+// silently.
+func copyStaticDir(siteDir, outputDir, staticDirName string) error {
+	srcDir := filepath.Join(siteDir, staticDirName)
+	if _, err := os.Stat(srcDir); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("checking static directory %s: %w", srcDir, err)
+	}
+	dstDir := filepath.Join(outputDir, staticDirName)
+	return filepath.WalkDir(srcDir, func(src string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		rel, err := filepath.Rel(srcDir, src)
+		if err != nil {
+			return err
+		}
+		dst := filepath.Join(dstDir, rel)
+		if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
+			return fmt.Errorf("creating directory for static file %s: %w", rel, err)
 		}
 		return copyFile(src, dst)
 	})
