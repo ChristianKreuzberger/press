@@ -178,7 +178,12 @@ func Rename(siteDir, oldName, newName string, now time.Time) error {
 	if err := os.Rename(oldDir, newDir); err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(newDir, "index.md"), content, 0644)
+	if err := os.WriteFile(filepath.Join(newDir, "index.md"), content, 0644); err != nil {
+		// Roll back the directory rename to avoid a half-applied state.
+		_ = os.Rename(newDir, oldDir)
+		return err
+	}
+	return nil
 }
 
 // ListPages returns all pages found inside a section directory, including index.md.

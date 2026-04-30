@@ -447,6 +447,17 @@ func TestHumanize(t *testing.T) {
 }
 
 func TestSetField(t *testing.T) {
+	t.Run("preserves exact formatting without extra blank lines", func(t *testing.T) {
+		content := "---\ntitle: \"Old Title\"\nupdated_at: \"2026-01-01T00:00:00Z\"\n---\n# Body\n"
+		got, err := SetField([]byte(content), "title", "New Title")
+		if err != nil {
+			t.Fatalf("SetField() error: %v", err)
+		}
+		want := "---\ntitle: \"New Title\"\nupdated_at: \"2026-01-01T00:00:00Z\"\n---\n# Body\n"
+		if string(got) != want {
+			t.Errorf("SetField() output:\ngot:  %q\nwant: %q", got, want)
+		}
+	})
 	t.Run("updates title", func(t *testing.T) {
 		content := "---\ntitle: \"Old Title\"\nupdated_at: \"2026-01-01T00:00:00Z\"\n---\n# Body\n"
 		got, err := SetField([]byte(content), "title", "New Title")

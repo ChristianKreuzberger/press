@@ -2,6 +2,7 @@ package frontmatter
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -9,6 +10,12 @@ import (
 	"time"
 	"unicode"
 )
+
+// ErrNoFrontmatter is returned by SetField when the content has no frontmatter block.
+var ErrNoFrontmatter = errors.New("frontmatter: no frontmatter block found")
+
+// ErrFieldNotFound is returned by SetField when the named field is absent from the frontmatter.
+var ErrFieldNotFound = errors.New("frontmatter: field not found")
 
 // Generate returns YAML frontmatter bytes for a new markdown file.
 // title is used as-is (the page/section name).
@@ -171,37 +178,35 @@ func SetField(content []byte, field, value string) ([]byte, error) {
 	s := string(content)
 	const delim = "---"
 	if !strings.HasPrefix(s, delim+"\n") {
-		return nil, fmt.Errorf("frontmatter: no frontmatter block found")
+		return nil, ErrNoFrontmatter
 	}
 	// Find the closing delimiter.
 	rest := s[len(delim)+1:]
 	end := strings.Index(rest, "\n"+delim)
 	if end == -1 {
-		return nil, fmt.Errorf("frontmatter: no closing delimiter found")
+		return nil, ErrNoFrontmatter
 	}
 	block := rest[:end]
 	after := rest[end:] // starts with "\n---"
 
 	prefix := field + ":"
 	found := false
-	var b strings.Builder
-	for _, line := range strings.Split(block, "\n") {
+	lines := strings.Split(block, "\n")
+	for i, line := range lines {
 		trimmedLeft := strings.TrimLeft(line, " \t")
 		if !found && strings.HasPrefix(trimmedLeft, prefix) {
 			// Preserve any leading whitespace from the original line.
 			leading := line[:len(line)-len(trimmedLeft)]
-			b.WriteString(leading + field + ": " + strconv.Quote(value) + "\n")
+			lines[i] = leading + field + ": " + strconv.Quote(value)
 			found = true
-			continue
 		}
-		b.WriteString(line + "\n")
 	}
 	if !found {
-		return nil, fmt.Errorf("frontmatter: field %q not found", field)
+		return nil, fmt.Errorf("%w: %q", ErrFieldNotFound, field)
 	}
-	// b ends with "\n" from the last line; after starts with "\n---"
-	// Reconstruct: opening delimiter + block lines + closing section
-	result := delim + "\n" + b.String() + after
+	// after starts with "\n---"; join lines without a trailing newline so no
+	// extra blank line is introduced before the closing delimiter.
+	result := delim + "\n" + strings.Join(lines, "\n") + after
 	return []byte(result), nil
 }
 
