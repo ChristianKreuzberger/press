@@ -2,12 +2,20 @@ package frontmatter
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 )
+
+// ErrNoFrontmatter is returned by SetField when the content has no frontmatter block.
+var ErrNoFrontmatter = errors.New("frontmatter: no frontmatter block found")
+
+// ErrFieldNotFound is returned by SetField when the named field is absent from the frontmatter.
+var ErrFieldNotFound = errors.New("frontmatter: field not found")
 
 // Generate returns YAML frontmatter bytes for a new markdown file.
 // title is used as-is (the page/section name).
@@ -141,6 +149,65 @@ func ParseWeight(content []byte) int {
 		return 0
 	}
 	return n
+}
+
+// Humanize converts a slug-style name to a human-readable title.
+// Hyphens and underscores are replaced with spaces, and each word is title-cased.
+func Humanize(name string) string {
+	r := strings.NewReplacer("-", " ", "_", " ")
+	words := strings.Fields(r.Replace(name))
+	for i, w := range words {
+		runes := []rune(w)
+		if len(runes) == 0 {
+			continue
+		}
+		runes[0] = unicode.ToUpper(runes[0])
+		for j := 1; j < len(runes); j++ {
+			runes[j] = unicode.ToLower(runes[j])
+		}
+		words[i] = string(runes)
+	}
+	return strings.Join(words, " ")
+}
+
+// SetField updates the value of a named field in the YAML frontmatter block.
+// The field must already exist in the frontmatter; the new value is written as
+// a double-quoted string. Returns an error if there is no frontmatter or the
+// field is absent.
+func SetField(content []byte, field, value string) ([]byte, error) {
+	s := string(content)
+	const delim = "---"
+	if !strings.HasPrefix(s, delim+"\n") {
+		return nil, ErrNoFrontmatter
+	}
+	// Find the closing delimiter.
+	rest := s[len(delim)+1:]
+	end := strings.Index(rest, "\n"+delim)
+	if end == -1 {
+		return nil, ErrNoFrontmatter
+	}
+	block := rest[:end]
+	after := rest[end:] // starts with "\n---"
+
+	prefix := field + ":"
+	found := false
+	lines := strings.Split(block, "\n")
+	for i, line := range lines {
+		trimmedLeft := strings.TrimLeft(line, " \t")
+		if !found && strings.HasPrefix(trimmedLeft, prefix) {
+			// Preserve any leading whitespace from the original line.
+			leading := line[:len(line)-len(trimmedLeft)]
+			lines[i] = leading + field + ": " + strconv.Quote(value)
+			found = true
+		}
+	}
+	if !found {
+		return nil, fmt.Errorf("%w: %q", ErrFieldNotFound, field)
+	}
+	// after starts with "\n---"; join lines without a trailing newline so no
+	// extra blank line is introduced before the closing delimiter.
+	result := delim + "\n" + strings.Join(lines, "\n") + after
+	return []byte(result), nil
 }
 
 // Strip removes YAML frontmatter from the beginning of a markdown document.
