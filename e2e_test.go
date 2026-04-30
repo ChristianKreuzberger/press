@@ -423,11 +423,27 @@ func TestE2ECheck(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// --- section directory without index.md ---
+	// --- static assets directory (no .md files) should not be reported as a missing section index ---
+	assetsDir := filepath.Join(pagesDir, "assets")
+	if err := os.MkdirAll(assetsDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(assetsDir, "style.css"), "body { margin: 0; }")
+	out = run(t, siteDir, "check")
+	if strings.Contains(out, "assets/") {
+		t.Errorf("check should not report assets directory as missing section index, got: %s", out)
+	}
+	if err := os.RemoveAll(assetsDir); err != nil {
+		t.Fatal(err)
+	}
+
+	// --- section directory without index.md (but with at least one .md file) ---
 	bareDir := filepath.Join(pagesDir, "bare")
 	if err := os.MkdirAll(bareDir, 0755); err != nil {
 		t.Fatal(err)
 	}
+	// Add a .md file so the directory is recognised as a section (not a static assets dir).
+	writeFile(t, filepath.Join(bareDir, "post.md"), "---\ntitle: \"Post\"\n---\n# Post\n\nContent.\n")
 	out = runExpectError(t, siteDir, "check")
 	if !strings.Contains(out, "bare/: section has no index.md") {
 		t.Errorf("check should report section without index.md, got: %s", out)
@@ -448,6 +464,26 @@ func TestE2ECheck(t *testing.T) {
 	out = run(t, siteDir, "check")
 	if strings.Contains(out, "broken link") {
 		t.Errorf("check should not report broken link after creating the target page, got: %s", out)
+	}
+
+	// --- image links should not be treated as broken page links ---
+	writeFile(t, filepath.Join(pagesDir, "with-image.md"), "---\ntitle: \"With Image\"\n---\n# With Image\n\n![logo](/assets/logo.png)\n")
+	out = run(t, siteDir, "check")
+	if strings.Contains(out, "with-image.md: broken link") {
+		t.Errorf("check should not report image links as broken page links, got: %s", out)
+	}
+	if err := os.Remove(filepath.Join(pagesDir, "with-image.md")); err != nil {
+		t.Fatal(err)
+	}
+
+	// --- link to site root "/" should validate against the index page ---
+	writeFile(t, filepath.Join(pagesDir, "with-root-link.md"), "---\ntitle: \"Root Link\"\n---\n# Root Link\n\nGo [home](/) for more.\n")
+	out = run(t, siteDir, "check")
+	if strings.Contains(out, "with-root-link.md: broken link") {
+		t.Errorf("check should not report '/' as a broken link when index.md exists, got: %s", out)
+	}
+	if err := os.Remove(filepath.Join(pagesDir, "with-root-link.md")); err != nil {
+		t.Fatal(err)
 	}
 
 	// --- exit code 0 when all clean ---

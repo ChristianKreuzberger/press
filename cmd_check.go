@@ -12,8 +12,9 @@ import (
 )
 
 // internalLinkRe matches Markdown links whose destination starts with "/".
-// It captures the full link destination (group 1).
-var internalLinkRe = regexp.MustCompile(`\[([^\]]*)\]\((/[^)]*)\)`)
+// Group 1 is "!" for image links (to be skipped), group 2 is the link text,
+// and group 3 is the destination.
+var internalLinkRe = regexp.MustCompile(`(!?)\[([^\]]*)\]\((/[^)]*)\)`)
 
 func runCheck(_ []string) {
 	siteDir := mustGetwd()
@@ -55,6 +56,26 @@ func runCheck(_ []string) {
 		}
 		sectionName := e.Name()
 		sectionPath := filepath.Join(pagesDir, sectionName)
+
+		// Only treat a subdirectory as a section if it contains at least one
+		// Markdown file. Directories with only static assets (e.g. pages/assets/)
+		// are intentionally skipped.
+		sectionFiles, err := os.ReadDir(sectionPath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error reading section %s: %v\n", sectionName, err)
+			os.Exit(1)
+		}
+		hasMd := false
+		for _, sf := range sectionFiles {
+			if !sf.IsDir() && strings.HasSuffix(sf.Name(), ".md") {
+				hasMd = true
+				break
+			}
+		}
+		if !hasMd {
+			continue
+		}
+
 		indexPath := filepath.Join(sectionPath, "index.md")
 
 		if _, statErr := os.Stat(indexPath); statErr != nil {
@@ -68,11 +89,6 @@ func runCheck(_ []string) {
 		}
 
 		// Check all .md files in this section.
-		sectionFiles, err := os.ReadDir(sectionPath)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "error reading section %s: %v\n", sectionName, err)
-			os.Exit(1)
-		}
 		for _, sf := range sectionFiles {
 			if sf.IsDir() || !strings.HasSuffix(sf.Name(), ".md") {
 				continue
@@ -119,7 +135,10 @@ func checkPage(relPath string, content []byte, validPaths map[string]bool) []str
 
 	// Check for broken internal links (absolute paths starting with "/").
 	for _, m := range internalLinkRe.FindAllStringSubmatch(string(content), -1) {
-		dest := m[2]
+		if m[1] == "!" {
+			continue // skip image links
+		}
+		dest := m[3]
 		// Strip fragment.
 		if idx := strings.IndexByte(dest, '#'); idx >= 0 {
 			dest = dest[:idx]
@@ -128,10 +147,10 @@ func checkPage(relPath string, content []byte, validPaths map[string]bool) []str
 		if idx := strings.IndexByte(dest, '?'); idx >= 0 {
 			dest = dest[:idx]
 		}
-		// Normalise trailing slash.
+		// Normalise trailing slash: "/" alone maps to the index page.
 		dest = strings.TrimSuffix(dest, "/")
 		if dest == "" {
-			continue
+			dest = "/index"
 		}
 		if !validPaths[dest] {
 			issues = append(issues, fmt.Sprintf("%s: broken link → %s (page not found)", relPath, dest))
