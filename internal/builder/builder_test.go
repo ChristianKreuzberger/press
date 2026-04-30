@@ -21,7 +21,7 @@ func TestBuildProducesHTMLFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := Build(siteDir, outDir, false); err != nil {
+	if _, err := Build(siteDir, outDir, false); err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
 
@@ -40,7 +40,7 @@ func TestBuildHTMLContent(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := Build(siteDir, outDir, false); err != nil {
+	if _, err := Build(siteDir, outDir, false); err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
 
@@ -72,7 +72,7 @@ func TestBuildNavigationLinks(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := Build(siteDir, outDir, false); err != nil {
+	if _, err := Build(siteDir, outDir, false); err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
 
@@ -99,7 +99,7 @@ func TestBuildCustomTemplate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := Build(siteDir, outDir, false); err != nil {
+	if _, err := Build(siteDir, outDir, false); err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
 
@@ -113,7 +113,7 @@ func TestBuildNoPages(t *testing.T) {
 	siteDir := t.TempDir()
 	outDir := filepath.Join(siteDir, "dist")
 
-	if err := Build(siteDir, outDir, false); err != nil {
+	if _, err := Build(siteDir, outDir, false); err != nil {
 		t.Fatalf("Build with no pages should not fail: %v", err)
 	}
 }
@@ -127,7 +127,7 @@ func TestBuildFallbackTitleFromFilename(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := Build(siteDir, outDir, false); err != nil {
+	if _, err := Build(siteDir, outDir, false); err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
 
@@ -148,7 +148,7 @@ func TestBuildWithSection(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := Build(siteDir, outDir, false); err != nil {
+	if _, err := Build(siteDir, outDir, false); err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
 
@@ -177,7 +177,7 @@ func TestBuildSectionNavLinksFromTopLevel(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := Build(siteDir, outDir, false); err != nil {
+	if _, err := Build(siteDir, outDir, false); err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
 
@@ -199,7 +199,7 @@ func TestBuildSectionNavLinksFromSection(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := Build(siteDir, outDir, false); err != nil {
+	if _, err := Build(siteDir, outDir, false); err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
 
@@ -226,7 +226,7 @@ func TestBuildSectionWithMultiplePages(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := Build(siteDir, outDir, false); err != nil {
+	if _, err := Build(siteDir, outDir, false); err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
 
@@ -268,7 +268,7 @@ func TestBuildNavSortedByWeight(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := Build(siteDir, outDir, false); err != nil {
+	if _, err := Build(siteDir, outDir, false); err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
 
@@ -301,7 +301,7 @@ func TestBuildNavWeightWithSection(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := Build(siteDir, outDir, false); err != nil {
+	if _, err := Build(siteDir, outDir, false); err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
 
@@ -334,7 +334,7 @@ func TestBuildSectionTOCByTitleAsc(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := Build(siteDir, outDir, false); err != nil {
+	if _, err := Build(siteDir, outDir, false); err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
 
@@ -371,7 +371,7 @@ func TestBuildSectionTOCByTitleDesc(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := Build(siteDir, outDir, false); err != nil {
+	if _, err := Build(siteDir, outDir, false); err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
 
@@ -405,7 +405,7 @@ func TestBuildSectionTOCByCreatedAtAsc(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := Build(siteDir, outDir, false); err != nil {
+	if _, err := Build(siteDir, outDir, false); err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
 
@@ -439,7 +439,7 @@ func TestBuildSectionTOCByCreatedAtDesc(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := Build(siteDir, outDir, false); err != nil {
+	if _, err := Build(siteDir, outDir, false); err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
 
@@ -473,7 +473,7 @@ func TestBuildSectionTOCByUpdatedAtDesc(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := Build(siteDir, outDir, false); err != nil {
+	if _, err := Build(siteDir, outDir, false); err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
 
@@ -512,7 +512,7 @@ func TestBuildSectionTOCByWeight(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := Build(siteDir, outDir, false); err != nil {
+	if _, err := Build(siteDir, outDir, false); err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
 
@@ -546,7 +546,7 @@ func TestBuildSectionTOCDefaultWeight(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := Build(siteDir, outDir, false); err != nil {
+	if _, err := Build(siteDir, outDir, false); err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
 
@@ -564,7 +564,7 @@ func TestBuildTOCEmptyForNonSectionPages(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := Build(siteDir, outDir, false); err != nil {
+	if _, err := Build(siteDir, outDir, false); err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
 
@@ -586,7 +586,7 @@ func TestBuildTOCEmptyForSectionChildPages(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := Build(siteDir, outDir, false); err != nil {
+	if _, err := Build(siteDir, outDir, false); err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
 
@@ -610,7 +610,7 @@ func TestBuildSectionTOCIndexNotIncluded(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := Build(siteDir, outDir, false); err != nil {
+	if _, err := Build(siteDir, outDir, false); err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
 
@@ -658,7 +658,7 @@ func TestBuildSectionTOCByWeightDesc(t *testing.T) {
 		}
 	}
 
-	if err := Build(siteDir, outDir, false); err != nil {
+	if _, err := Build(siteDir, outDir, false); err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
 
@@ -694,7 +694,7 @@ func TestBuildSectionTOCByUpdatedAtAsc(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := Build(siteDir, outDir, false); err != nil {
+	if _, err := Build(siteDir, outDir, false); err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
 
@@ -723,7 +723,7 @@ func TestBuildSectionTOCFallbackTitle(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := Build(siteDir, outDir, false); err != nil {
+	if _, err := Build(siteDir, outDir, false); err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
 
@@ -747,7 +747,7 @@ func TestBuildInvalidTemplate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := Build(siteDir, outDir, false); err == nil {
+	if _, err := Build(siteDir, outDir, false); err == nil {
 		t.Error("expected error for invalid template, got nil")
 	}
 }
@@ -768,7 +768,7 @@ func TestBuildUnreadableTemplate(t *testing.T) {
 		t.Skip("skipping: filesystem does not enforce permission bits")
 	}
 
-	if err := Build(siteDir, outDir, false); err == nil {
+	if _, err := Build(siteDir, outDir, false); err == nil {
 		t.Error("expected error for unreadable template, got nil")
 	}
 }
@@ -792,7 +792,7 @@ func TestBuildUnreadablePage(t *testing.T) {
 		t.Skip("skipping: filesystem does not enforce permission bits")
 	}
 
-	if err := Build(siteDir, outDir, false); err == nil {
+	if _, err := Build(siteDir, outDir, false); err == nil {
 		t.Error("expected error for unreadable page, got nil")
 	}
 }
@@ -823,7 +823,7 @@ func TestBuildCopiesStaticAssets(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := Build(siteDir, outDir, false); err != nil {
+	if _, err := Build(siteDir, outDir, false); err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
 
@@ -861,7 +861,7 @@ func TestBuildCopiesStaticAssetsInSection(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := Build(siteDir, outDir, false); err != nil {
+	if _, err := Build(siteDir, outDir, false); err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
 
@@ -885,7 +885,7 @@ func TestBuildSkipsDraftPageByDefault(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := Build(siteDir, outDir, false); err != nil {
+	if _, err := Build(siteDir, outDir, false); err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
 
@@ -908,7 +908,7 @@ func TestBuildIncludesDraftPageWithFlag(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := Build(siteDir, outDir, true); err != nil {
+	if _, err := Build(siteDir, outDir, true); err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
 
@@ -928,7 +928,7 @@ func TestBuildDraftPageExcludedFromNavigation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := Build(siteDir, outDir, false); err != nil {
+	if _, err := Build(siteDir, outDir, false); err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
 
@@ -959,7 +959,7 @@ func TestBuildSkipsDraftSectionPageByDefault(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := Build(siteDir, outDir, false); err != nil {
+	if _, err := Build(siteDir, outDir, false); err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
 
@@ -989,7 +989,7 @@ func TestBuildDraftSectionPageExcludedFromTOC(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := Build(siteDir, outDir, false); err != nil {
+	if _, err := Build(siteDir, outDir, false); err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
 
@@ -999,5 +999,42 @@ func TestBuildDraftSectionPageExcludedFromTOC(t *testing.T) {
 	}
 	if strings.Contains(string(content), "wip.html") {
 		t.Error("expected draft page wip.html to be absent from section TOC")
+	}
+}
+
+func TestBuildReturnsBuiltPaths(t *testing.T) {
+	siteDir := t.TempDir()
+	outDir := filepath.Join(siteDir, "dist")
+
+	if err := page.Create(siteDir, "index", []byte("# Home\n\nWelcome!\n")); err != nil {
+		t.Fatal(err)
+	}
+	if err := page.Create(siteDir, "about", []byte("# About\n\nLearn more.\n")); err != nil {
+		t.Fatal(err)
+	}
+
+	built, err := Build(siteDir, outDir, false)
+	if err != nil {
+		t.Fatalf("Build failed: %v", err)
+	}
+
+	if len(built) != 2 {
+		t.Fatalf("expected 2 built paths, got %d: %v", len(built), built)
+	}
+
+	foundIndex, foundAbout := false, false
+	for _, p := range built {
+		if strings.HasSuffix(p, "index.html") {
+			foundIndex = true
+		}
+		if strings.HasSuffix(p, "about.html") {
+			foundAbout = true
+		}
+	}
+	if !foundIndex {
+		t.Errorf("expected built paths to contain index.html, got: %v", built)
+	}
+	if !foundAbout {
+		t.Errorf("expected built paths to contain about.html, got: %v", built)
 	}
 }

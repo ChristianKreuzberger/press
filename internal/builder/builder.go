@@ -49,25 +49,26 @@ type TemplateData struct {
 // Top-level pages (pages/*.md) are written to outputDir directly.
 // Section pages (pages/<section>/*.md) are written to outputDir/<section>/.
 // When includeDrafts is false, pages with draft: true in their frontmatter are skipped.
-func Build(siteDir, outputDir string, includeDrafts bool) error {
+// It returns the list of absolute paths of HTML files that were written.
+func Build(siteDir, outputDir string, includeDrafts bool) ([]string, error) {
 	pages, err := page.List(siteDir)
 	if err != nil {
-		return fmt.Errorf("listing pages: %w", err)
+		return nil, fmt.Errorf("listing pages: %w", err)
 	}
 
 	sections, err := section.List(siteDir)
 	if err != nil {
-		return fmt.Errorf("listing sections: %w", err)
+		return nil, fmt.Errorf("listing sections: %w", err)
 	}
 
 	tmplContent, err := readTemplate(siteDir)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	tmpl, err := template.New("page").Parse(tmplContent)
 	if err != nil {
-		return fmt.Errorf("parsing template: %w", err)
+		return nil, fmt.Errorf("parsing template: %w", err)
 	}
 
 	// rootNavRefs contains navigation entries with paths relative to the output root
@@ -76,26 +77,30 @@ func Build(siteDir, outputDir string, includeDrafts bool) error {
 	// directory.
 	rootNavRefs, err := buildRootNavRefs(pages, sections, includeDrafts)
 	if err != nil {
-		return fmt.Errorf("building nav refs: %w", err)
+		return nil, fmt.Errorf("building nav refs: %w", err)
 	}
 
 	if err := os.MkdirAll(outputDir, 0755); err != nil {
-		return fmt.Errorf("creating output directory: %w", err)
+		return nil, fmt.Errorf("creating output directory: %w", err)
 	}
+
+	var built []string
 
 	// Build top-level pages.
 	for _, p := range pages {
 		if !includeDrafts && p.Draft {
 			continue
 		}
-		if err := buildPageFromPath(p.Name, p.Path, filepath.Join(outputDir, p.Name+".html"), rootNavRefs, nil, tmpl); err != nil {
-			return err
+		outPath := filepath.Join(outputDir, p.Name+".html")
+		if err := buildPageFromPath(p.Name, p.Path, outPath, rootNavRefs, nil, tmpl); err != nil {
+			return nil, err
 		}
+		built = append(built, outPath)
 	}
 
 	// Copy non-Markdown files from pages/ to outputDir.
 	if err := copyStaticAssets(siteDir, outputDir); err != nil {
-		return err
+		return nil, err
 	}
 
 	// Build section pages.
@@ -103,7 +108,7 @@ func Build(siteDir, outputDir string, includeDrafts bool) error {
 		// Read the section index up front so we can check its draft status.
 		indexContent, err := os.ReadFile(s.IndexPath)
 		if err != nil {
-			return fmt.Errorf("reading section index %s: %w", s.IndexPath, err)
+			return nil, fmt.Errorf("reading section index %s: %w", s.IndexPath, err)
 		}
 		// Skip the entire section when its index.md is a draft and drafts are excluded.
 		if !includeDrafts && frontmatter.ParseDraft(indexContent) {
@@ -111,11 +116,11 @@ func Build(siteDir, outputDir string, includeDrafts bool) error {
 		}
 		sectionPages, err := section.ListPages(siteDir, s.Name)
 		if err != nil {
-			return fmt.Errorf("listing pages in section %s: %w", s.Name, err)
+			return nil, fmt.Errorf("listing pages in section %s: %w", s.Name, err)
 		}
 		sectionOutDir := filepath.Join(outputDir, s.Name)
 		if err := os.MkdirAll(sectionOutDir, 0755); err != nil {
-			return fmt.Errorf("creating section output directory %s: %w", sectionOutDir, err)
+			return nil, fmt.Errorf("creating section output directory %s: %w", sectionOutDir, err)
 		}
 		// Build the TOC for this section's index page.
 		toc := buildSectionTOC(sectionPages, indexContent, includeDrafts)
@@ -131,11 +136,12 @@ func Build(siteDir, outputDir string, includeDrafts bool) error {
 				pageTOC = toc
 			}
 			if err := buildPageFromPath(sp.Name, sp.Path, outPath, sectionNavRefs, pageTOC, tmpl); err != nil {
-				return err
+				return nil, err
 			}
+			built = append(built, outPath)
 		}
 	}
-	return nil
+	return built, nil
 }
 
 // weightedRef pairs a PageRef with its navigation weight for sorting.

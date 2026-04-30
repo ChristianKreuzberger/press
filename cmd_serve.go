@@ -65,7 +65,7 @@ func runServe(args []string) {
 
 	// Initial build.
 	fmt.Println("building site...")
-	if err := builder.Build(siteDir, outputDir, *draftsFlag); err != nil {
+	if _, err := builder.Build(siteDir, outputDir, *draftsFlag); err != nil {
 		fmt.Fprintf(os.Stderr, "build failed: %v\n", err)
 		os.Exit(1)
 	}
@@ -117,7 +117,7 @@ func runServe(args []string) {
 			if hasChanged(prev, curr) {
 				prev = curr
 				fmt.Println("change detected — rebuilding...")
-				if err := builder.Build(siteDir, outputDir, *draftsFlag); err != nil {
+				if _, err := builder.Build(siteDir, outputDir, *draftsFlag); err != nil {
 					fmt.Fprintf(os.Stderr, "rebuild failed: %v\n", err)
 				} else {
 					fmt.Println("rebuilt successfully")
