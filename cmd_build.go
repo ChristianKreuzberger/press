@@ -15,7 +15,7 @@ func runBuild(args []string) {
 	outputFlag := fs.String("output", "dist", "output directory for generated HTML files")
 	draftsFlag := fs.Bool("drafts", false, "include draft pages in the build")
 	verboseFlag := fs.Bool("verbose", false, "print each built page")
-	staticFlag := fs.String("static", "static", "name of the static assets directory to copy verbatim")
+	staticFlag := fs.String("static", "static", "name of the static assets directory to copy into the output")
 	_ = fs.Parse(args)
 
 	siteDir := mustGetwd()

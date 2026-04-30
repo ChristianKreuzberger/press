@@ -57,7 +57,7 @@ func runServe(args []string) {
 	outputFlag := fs.String("output", "dist", "output directory for generated HTML files")
 	intervalFlag := fs.Duration("interval", time.Second, "polling interval for file changes")
 	draftsFlag := fs.Bool("drafts", false, "include draft pages in the build")
-	staticFlag := fs.String("static", "static", "name of the static assets directory to copy verbatim")
+	staticFlag := fs.String("static", "static", "name of the static assets directory to copy into the output")
 	_ = fs.Parse(args)
 
 	siteDir := mustGetwd()

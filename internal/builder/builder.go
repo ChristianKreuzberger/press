@@ -49,9 +49,9 @@ type TemplateData struct {
 // Top-level pages (pages/*.md) are written to outputDir directly.
 // Section pages (pages/<section>/*.md) are written to outputDir/<section>/.
 // When includeDrafts is false, pages with draft: true in their frontmatter are skipped.
-// staticDir names a directory relative to siteDir whose contents are copied verbatim
-// into outputDir preserving directory structure; if it does not exist it is silently
-// skipped.
+// staticDir names a directory relative to siteDir whose files are copied into
+// outputDir while preserving directory structure; if it does not exist it is
+// silently skipped.
 // It returns the list of absolute paths of HTML files that were written.
 func Build(siteDir, outputDir string, includeDrafts bool, staticDir string) ([]string, error) {
 	outputDir, err := filepath.Abs(outputDir)
@@ -368,24 +368,55 @@ func copyStaticAssets(siteDir, outputDir string) error {
 	})
 }
 
+// validateStaticDirName checks that staticDirName is safe to use as a path
+// component relative to siteDir. It rejects empty values, absolute paths, and
+// names that escape the site directory via "..".
+func validateStaticDirName(staticDirName string) (string, error) {
+	if staticDirName == "" {
+		return "", fmt.Errorf("static directory name must not be empty")
+	}
+	if filepath.IsAbs(staticDirName) {
+		return "", fmt.Errorf("static directory name must be relative to the site directory: %s", staticDirName)
+	}
+	clean := filepath.Clean(staticDirName)
+	if clean == "." {
+		return "", fmt.Errorf("static directory name must not be empty")
+	}
+	if clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("static directory name must be relative to the site directory: %s", staticDirName)
+	}
+	return clean, nil
+}
+
 // copyStaticDir copies all files from the directory named staticDirName inside
 // siteDir into a same-named subdirectory of outputDir, preserving the directory
-// structure.  If the source directory does not exist the function returns nil
-// silently.
+// structure. Symlinks are skipped. If the source directory does not exist the
+// function returns nil silently.
 func copyStaticDir(siteDir, outputDir, staticDirName string) error {
-	srcDir := filepath.Join(siteDir, staticDirName)
-	if _, err := os.Stat(srcDir); err != nil {
+	cleanName, err := validateStaticDirName(staticDirName)
+	if err != nil {
+		return err
+	}
+	srcDir := filepath.Join(siteDir, cleanName)
+	info, err := os.Stat(srcDir)
+	if err != nil {
 		if os.IsNotExist(err) {
 			return nil
 		}
 		return fmt.Errorf("checking static directory %s: %w", srcDir, err)
 	}
-	dstDir := filepath.Join(outputDir, staticDirName)
+	if !info.IsDir() {
+		return fmt.Errorf("static directory %s is not a directory", srcDir)
+	}
+	dstDir := filepath.Join(outputDir, cleanName)
 	return filepath.WalkDir(srcDir, func(src string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 		if d.IsDir() {
+			return nil
+		}
+		if d.Type()&os.ModeSymlink != 0 {
 			return nil
 		}
 		rel, err := filepath.Rel(srcDir, src)

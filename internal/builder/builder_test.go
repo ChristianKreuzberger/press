@@ -1140,3 +1140,69 @@ func TestBuildCustomStaticDirName(t *testing.T) {
 		t.Errorf("dist/assets/style.css content mismatch: got %q, want %q", string(got), string(cssData))
 	}
 }
+
+func TestValidateStaticDirName(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+		want    string
+	}{
+		{name: "valid simple", input: "static", want: "static"},
+		{name: "valid nested", input: "a/b", want: "a/b"},
+		{name: "empty", input: "", wantErr: true},
+		{name: "dot only", input: ".", wantErr: true},
+		{name: "dot-dot", input: "..", wantErr: true},
+		{name: "dot-dot prefix", input: "../escape", wantErr: true},
+		{name: "absolute", input: "/etc/passwd", wantErr: true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := validateStaticDirName(tc.input)
+			if tc.wantErr {
+				if err == nil {
+					t.Errorf("expected error for input %q, got nil (result: %q)", tc.input, got)
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("unexpected error for input %q: %v", tc.input, err)
+			}
+			if got != tc.want {
+				t.Errorf("validateStaticDirName(%q) = %q, want %q", tc.input, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestBuildStaticDirIsFile(t *testing.T) {
+	siteDir := t.TempDir()
+	outDir := filepath.Join(siteDir, "dist")
+
+	if err := page.Create(siteDir, "index", []byte("# Home\n")); err != nil {
+		t.Fatal(err)
+	}
+	// Create a file named "static" instead of a directory.
+	if err := os.WriteFile(filepath.Join(siteDir, "static"), []byte("not a dir"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := Build(siteDir, outDir, false, "static")
+	if err == nil {
+		t.Fatal("expected Build to fail when static path is a file, got nil")
+	}
+}
+
+func TestBuildStaticDirInvalidName(t *testing.T) {
+	siteDir := t.TempDir()
+	outDir := filepath.Join(siteDir, "dist")
+
+	if err := page.Create(siteDir, "index", []byte("# Home\n")); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := Build(siteDir, outDir, false, "../escape")
+	if err == nil {
+		t.Fatal("expected Build to fail for traversal static dir name, got nil")
+	}
+}
