@@ -1024,6 +1024,15 @@ func TestBuildReturnsBuiltPaths(t *testing.T) {
 
 	foundIndex, foundAbout := false, false
 	for _, p := range built {
+		if !filepath.IsAbs(p) {
+			t.Errorf("expected built path to be absolute, got: %q", p)
+		}
+		rel, err := filepath.Rel(outDir, p)
+		if err != nil {
+			t.Errorf("failed to compare built path %q to outDir %q: %v", p, outDir, err)
+		} else if rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+			t.Errorf("expected built path %q to be under outDir %q", p, outDir)
+		}
 		if strings.HasSuffix(p, "index.html") {
 			foundIndex = true
 		}

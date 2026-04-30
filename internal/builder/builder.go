@@ -51,6 +51,11 @@ type TemplateData struct {
 // When includeDrafts is false, pages with draft: true in their frontmatter are skipped.
 // It returns the list of absolute paths of HTML files that were written.
 func Build(siteDir, outputDir string, includeDrafts bool) ([]string, error) {
+	outputDir, err := filepath.Abs(outputDir)
+	if err != nil {
+		return nil, fmt.Errorf("resolving output dir: %w", err)
+	}
+
 	pages, err := page.List(siteDir)
 	if err != nil {
 		return nil, fmt.Errorf("listing pages: %w", err)
