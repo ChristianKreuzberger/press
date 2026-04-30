@@ -617,3 +617,35 @@ func TestE2EDraft(t *testing.T) {
 		t.Error("build --drafts should produce dist-drafts/blog/wip-post.html")
 	}
 }
+
+func TestBuildSummary(t *testing.T) {
+	siteDir := t.TempDir()
+	run(t, siteDir, "init")
+	run(t, siteDir, "create", "page", "about")
+	out := run(t, siteDir, "build")
+	if !strings.Contains(out, "✓ Built") {
+		t.Errorf("build output should contain '✓ Built', got: %s", out)
+	}
+	if !strings.Contains(out, "pages in") {
+		t.Errorf("build output should contain 'pages in', got: %s", out)
+	}
+	if !strings.Contains(out, "→ dist/") {
+		t.Errorf("build output should contain '→ dist/', got: %s", out)
+	}
+}
+
+func TestBuildVerbose(t *testing.T) {
+	siteDir := t.TempDir()
+	run(t, siteDir, "init")
+	run(t, siteDir, "create", "page", "about")
+	out := run(t, siteDir, "build", "--verbose")
+	if !strings.Contains(out, "dist/index.html") {
+		t.Errorf("verbose build output should list dist/index.html, got: %s", out)
+	}
+	if !strings.Contains(out, "dist/about.html") {
+		t.Errorf("verbose build output should list dist/about.html, got: %s", out)
+	}
+	if !strings.Contains(out, "✓ Built") {
+		t.Errorf("verbose build output should contain '✓ Built', got: %s", out)
+	}
+}
