@@ -66,6 +66,7 @@ press serve
 | `press build [-output dir]` | Build the site into `dist/` (default) |
 | `press serve [-port N] [-output dir]` | Build and serve the site locally; rebuilds on file changes |
 | `press tree` | Show a tree of all pages and sections |
+| `press check` | Validate pages and internal links; exits with code 1 if issues are found |
 | `press --version` | Print the installed version |
 
 Run any command with `--help` for detailed usage.
