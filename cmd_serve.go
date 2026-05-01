@@ -57,6 +57,7 @@ func runServe(args []string) {
 	outputFlag := fs.String("output", "dist", "output directory for generated HTML files")
 	intervalFlag := fs.Duration("interval", time.Second, "polling interval for file changes")
 	draftsFlag := fs.Bool("drafts", false, "include draft pages in the build")
+	staticFlag := fs.String("static", "static", "name of the static assets directory to copy into the output")
 	_ = fs.Parse(args)
 
 	siteDir := mustGetwd()
@@ -65,7 +66,7 @@ func runServe(args []string) {
 
 	// Initial build.
 	fmt.Println("building site...")
-	if _, err := builder.Build(siteDir, outputDir, *draftsFlag); err != nil {
+	if _, err := builder.Build(siteDir, outputDir, *draftsFlag, *staticFlag); err != nil {
 		fmt.Fprintf(os.Stderr, "build failed: %v\n", err)
 		os.Exit(1)
 	}
@@ -117,7 +118,7 @@ func runServe(args []string) {
 			if hasChanged(prev, curr) {
 				prev = curr
 				fmt.Println("change detected — rebuilding...")
-				if _, err := builder.Build(siteDir, outputDir, *draftsFlag); err != nil {
+				if _, err := builder.Build(siteDir, outputDir, *draftsFlag, *staticFlag); err != nil {
 					fmt.Fprintf(os.Stderr, "rebuild failed: %v\n", err)
 				} else {
 					fmt.Println("rebuilt successfully")

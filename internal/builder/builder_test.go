@@ -21,7 +21,7 @@ func TestBuildProducesHTMLFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := Build(siteDir, outDir, false); err != nil {
+	if _, err := Build(siteDir, outDir, false, "static"); err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
 
@@ -40,7 +40,7 @@ func TestBuildHTMLContent(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := Build(siteDir, outDir, false); err != nil {
+	if _, err := Build(siteDir, outDir, false, "static"); err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
 
@@ -72,7 +72,7 @@ func TestBuildNavigationLinks(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := Build(siteDir, outDir, false); err != nil {
+	if _, err := Build(siteDir, outDir, false, "static"); err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
 
@@ -99,7 +99,7 @@ func TestBuildCustomTemplate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := Build(siteDir, outDir, false); err != nil {
+	if _, err := Build(siteDir, outDir, false, "static"); err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
 
@@ -113,7 +113,7 @@ func TestBuildNoPages(t *testing.T) {
 	siteDir := t.TempDir()
 	outDir := filepath.Join(siteDir, "dist")
 
-	if _, err := Build(siteDir, outDir, false); err != nil {
+	if _, err := Build(siteDir, outDir, false, "static"); err != nil {
 		t.Fatalf("Build with no pages should not fail: %v", err)
 	}
 }
@@ -127,7 +127,7 @@ func TestBuildFallbackTitleFromFilename(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := Build(siteDir, outDir, false); err != nil {
+	if _, err := Build(siteDir, outDir, false, "static"); err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
 
@@ -148,7 +148,7 @@ func TestBuildWithSection(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := Build(siteDir, outDir, false); err != nil {
+	if _, err := Build(siteDir, outDir, false, "static"); err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
 
@@ -177,7 +177,7 @@ func TestBuildSectionNavLinksFromTopLevel(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := Build(siteDir, outDir, false); err != nil {
+	if _, err := Build(siteDir, outDir, false, "static"); err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
 
@@ -199,7 +199,7 @@ func TestBuildSectionNavLinksFromSection(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := Build(siteDir, outDir, false); err != nil {
+	if _, err := Build(siteDir, outDir, false, "static"); err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
 
@@ -226,7 +226,7 @@ func TestBuildSectionWithMultiplePages(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := Build(siteDir, outDir, false); err != nil {
+	if _, err := Build(siteDir, outDir, false, "static"); err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
 
@@ -268,7 +268,7 @@ func TestBuildNavSortedByWeight(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := Build(siteDir, outDir, false); err != nil {
+	if _, err := Build(siteDir, outDir, false, "static"); err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
 
@@ -301,7 +301,7 @@ func TestBuildNavWeightWithSection(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := Build(siteDir, outDir, false); err != nil {
+	if _, err := Build(siteDir, outDir, false, "static"); err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
 
@@ -334,7 +334,7 @@ func TestBuildSectionTOCByTitleAsc(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := Build(siteDir, outDir, false); err != nil {
+	if _, err := Build(siteDir, outDir, false, "static"); err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
 
@@ -371,7 +371,7 @@ func TestBuildSectionTOCByTitleDesc(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := Build(siteDir, outDir, false); err != nil {
+	if _, err := Build(siteDir, outDir, false, "static"); err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
 
@@ -405,7 +405,7 @@ func TestBuildSectionTOCByCreatedAtAsc(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := Build(siteDir, outDir, false); err != nil {
+	if _, err := Build(siteDir, outDir, false, "static"); err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
 
@@ -439,7 +439,7 @@ func TestBuildSectionTOCByCreatedAtDesc(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := Build(siteDir, outDir, false); err != nil {
+	if _, err := Build(siteDir, outDir, false, "static"); err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
 
@@ -473,7 +473,7 @@ func TestBuildSectionTOCByUpdatedAtDesc(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := Build(siteDir, outDir, false); err != nil {
+	if _, err := Build(siteDir, outDir, false, "static"); err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
 
@@ -512,7 +512,7 @@ func TestBuildSectionTOCByWeight(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := Build(siteDir, outDir, false); err != nil {
+	if _, err := Build(siteDir, outDir, false, "static"); err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
 
@@ -546,7 +546,7 @@ func TestBuildSectionTOCDefaultWeight(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := Build(siteDir, outDir, false); err != nil {
+	if _, err := Build(siteDir, outDir, false, "static"); err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
 
@@ -564,7 +564,7 @@ func TestBuildTOCEmptyForNonSectionPages(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := Build(siteDir, outDir, false); err != nil {
+	if _, err := Build(siteDir, outDir, false, "static"); err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
 
@@ -586,7 +586,7 @@ func TestBuildTOCEmptyForSectionChildPages(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := Build(siteDir, outDir, false); err != nil {
+	if _, err := Build(siteDir, outDir, false, "static"); err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
 
@@ -610,7 +610,7 @@ func TestBuildSectionTOCIndexNotIncluded(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := Build(siteDir, outDir, false); err != nil {
+	if _, err := Build(siteDir, outDir, false, "static"); err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
 
@@ -658,7 +658,7 @@ func TestBuildSectionTOCByWeightDesc(t *testing.T) {
 		}
 	}
 
-	if _, err := Build(siteDir, outDir, false); err != nil {
+	if _, err := Build(siteDir, outDir, false, "static"); err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
 
@@ -694,7 +694,7 @@ func TestBuildSectionTOCByUpdatedAtAsc(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := Build(siteDir, outDir, false); err != nil {
+	if _, err := Build(siteDir, outDir, false, "static"); err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
 
@@ -723,7 +723,7 @@ func TestBuildSectionTOCFallbackTitle(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := Build(siteDir, outDir, false); err != nil {
+	if _, err := Build(siteDir, outDir, false, "static"); err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
 
@@ -747,7 +747,7 @@ func TestBuildInvalidTemplate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := Build(siteDir, outDir, false); err == nil {
+	if _, err := Build(siteDir, outDir, false, "static"); err == nil {
 		t.Error("expected error for invalid template, got nil")
 	}
 }
@@ -768,7 +768,7 @@ func TestBuildUnreadableTemplate(t *testing.T) {
 		t.Skip("skipping: filesystem does not enforce permission bits")
 	}
 
-	if _, err := Build(siteDir, outDir, false); err == nil {
+	if _, err := Build(siteDir, outDir, false, "static"); err == nil {
 		t.Error("expected error for unreadable template, got nil")
 	}
 }
@@ -792,7 +792,7 @@ func TestBuildUnreadablePage(t *testing.T) {
 		t.Skip("skipping: filesystem does not enforce permission bits")
 	}
 
-	if _, err := Build(siteDir, outDir, false); err == nil {
+	if _, err := Build(siteDir, outDir, false, "static"); err == nil {
 		t.Error("expected error for unreadable page, got nil")
 	}
 }
@@ -823,7 +823,7 @@ func TestBuildCopiesStaticAssets(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := Build(siteDir, outDir, false); err != nil {
+	if _, err := Build(siteDir, outDir, false, "static"); err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
 
@@ -861,7 +861,7 @@ func TestBuildCopiesStaticAssetsInSection(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := Build(siteDir, outDir, false); err != nil {
+	if _, err := Build(siteDir, outDir, false, "static"); err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
 
@@ -885,7 +885,7 @@ func TestBuildSkipsDraftPageByDefault(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := Build(siteDir, outDir, false); err != nil {
+	if _, err := Build(siteDir, outDir, false, "static"); err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
 
@@ -908,7 +908,7 @@ func TestBuildIncludesDraftPageWithFlag(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := Build(siteDir, outDir, true); err != nil {
+	if _, err := Build(siteDir, outDir, true, "static"); err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
 
@@ -928,7 +928,7 @@ func TestBuildDraftPageExcludedFromNavigation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := Build(siteDir, outDir, false); err != nil {
+	if _, err := Build(siteDir, outDir, false, "static"); err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
 
@@ -959,7 +959,7 @@ func TestBuildSkipsDraftSectionPageByDefault(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := Build(siteDir, outDir, false); err != nil {
+	if _, err := Build(siteDir, outDir, false, "static"); err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
 
@@ -989,7 +989,7 @@ func TestBuildDraftSectionPageExcludedFromTOC(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := Build(siteDir, outDir, false); err != nil {
+	if _, err := Build(siteDir, outDir, false, "static"); err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
 
@@ -1013,7 +1013,7 @@ func TestBuildReturnsBuiltPaths(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	built, err := Build(siteDir, outDir, false)
+	built, err := Build(siteDir, outDir, false, "static")
 	if err != nil {
 		t.Fatalf("Build failed: %v", err)
 	}
@@ -1045,5 +1045,164 @@ func TestBuildReturnsBuiltPaths(t *testing.T) {
 	}
 	if !foundAbout {
 		t.Errorf("expected built paths to contain about.html, got: %v", built)
+	}
+}
+
+func TestBuildCopiesStaticDir(t *testing.T) {
+	siteDir := t.TempDir()
+	outDir := filepath.Join(siteDir, "dist")
+
+	if err := page.Create(siteDir, "index", []byte("# Home\n")); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create static/favicon.ico and static/images/logo.png.
+	staticDir := filepath.Join(siteDir, "static")
+	if err := os.MkdirAll(filepath.Join(staticDir, "images"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	faviconData := []byte("favicon")
+	logoData := []byte("logo")
+	if err := os.WriteFile(filepath.Join(staticDir, "favicon.ico"), faviconData, 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(staticDir, "images", "logo.png"), logoData, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := Build(siteDir, outDir, false, "static"); err != nil {
+		t.Fatalf("Build failed: %v", err)
+	}
+
+	got, err := os.ReadFile(filepath.Join(outDir, "static", "favicon.ico"))
+	if err != nil {
+		t.Fatalf("expected dist/static/favicon.ico to exist: %v", err)
+	}
+	if string(got) != string(faviconData) {
+		t.Errorf("dist/static/favicon.ico content mismatch: got %q, want %q", string(got), string(faviconData))
+	}
+
+	got, err = os.ReadFile(filepath.Join(outDir, "static", "images", "logo.png"))
+	if err != nil {
+		t.Fatalf("expected dist/static/images/logo.png to exist: %v", err)
+	}
+	if string(got) != string(logoData) {
+		t.Errorf("dist/static/images/logo.png content mismatch: got %q, want %q", string(got), string(logoData))
+	}
+}
+
+func TestBuildStaticDirAbsent(t *testing.T) {
+	siteDir := t.TempDir()
+	outDir := filepath.Join(siteDir, "dist")
+
+	if err := page.Create(siteDir, "index", []byte("# Home\n")); err != nil {
+		t.Fatal(err)
+	}
+
+	// No static/ directory — build should succeed silently.
+	if _, err := Build(siteDir, outDir, false, "static"); err != nil {
+		t.Fatalf("Build failed when static dir absent: %v", err)
+	}
+
+	// dist/static/ should not have been created.
+	if _, err := os.Stat(filepath.Join(outDir, "static")); err == nil {
+		t.Error("expected dist/static/ not to exist when source static/ is absent")
+	}
+}
+
+func TestBuildCustomStaticDirName(t *testing.T) {
+	siteDir := t.TempDir()
+	outDir := filepath.Join(siteDir, "dist")
+
+	if err := page.Create(siteDir, "index", []byte("# Home\n")); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create assets/style.css.
+	assetsDir := filepath.Join(siteDir, "assets")
+	if err := os.MkdirAll(assetsDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	cssData := []byte("body { margin: 0; }")
+	if err := os.WriteFile(filepath.Join(assetsDir, "style.css"), cssData, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := Build(siteDir, outDir, false, "assets"); err != nil {
+		t.Fatalf("Build failed: %v", err)
+	}
+
+	got, err := os.ReadFile(filepath.Join(outDir, "assets", "style.css"))
+	if err != nil {
+		t.Fatalf("expected dist/assets/style.css to exist: %v", err)
+	}
+	if string(got) != string(cssData) {
+		t.Errorf("dist/assets/style.css content mismatch: got %q, want %q", string(got), string(cssData))
+	}
+}
+
+func TestValidateStaticDirName(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+		want    string
+	}{
+		{name: "valid simple", input: "static", want: "static"},
+		{name: "valid nested", input: "a/b", want: "a/b"},
+		{name: "empty", input: "", wantErr: true},
+		{name: "dot only", input: ".", wantErr: true},
+		{name: "dot-dot", input: "..", wantErr: true},
+		{name: "dot-dot prefix", input: "../escape", wantErr: true},
+		{name: "absolute", input: "/etc/passwd", wantErr: true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := validateStaticDirName(tc.input)
+			if tc.wantErr {
+				if err == nil {
+					t.Errorf("expected error for input %q, got nil (result: %q)", tc.input, got)
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("unexpected error for input %q: %v", tc.input, err)
+			}
+			if got != tc.want {
+				t.Errorf("validateStaticDirName(%q) = %q, want %q", tc.input, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestBuildStaticDirIsFile(t *testing.T) {
+	siteDir := t.TempDir()
+	outDir := filepath.Join(siteDir, "dist")
+
+	if err := page.Create(siteDir, "index", []byte("# Home\n")); err != nil {
+		t.Fatal(err)
+	}
+	// Create a file named "static" instead of a directory.
+	if err := os.WriteFile(filepath.Join(siteDir, "static"), []byte("not a dir"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := Build(siteDir, outDir, false, "static")
+	if err == nil {
+		t.Fatal("expected Build to fail when static path is a file, got nil")
+	}
+}
+
+func TestBuildStaticDirInvalidName(t *testing.T) {
+	siteDir := t.TempDir()
+	outDir := filepath.Join(siteDir, "dist")
+
+	if err := page.Create(siteDir, "index", []byte("# Home\n")); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := Build(siteDir, outDir, false, "../escape")
+	if err == nil {
+		t.Fatal("expected Build to fail for traversal static dir name, got nil")
 	}
 }

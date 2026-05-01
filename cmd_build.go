@@ -15,6 +15,7 @@ func runBuild(args []string) {
 	outputFlag := fs.String("output", "dist", "output directory for generated HTML files")
 	draftsFlag := fs.Bool("drafts", false, "include draft pages in the build")
 	verboseFlag := fs.Bool("verbose", false, "print each built page")
+	staticFlag := fs.String("static", "static", "name of the static assets directory to copy into the output")
 	_ = fs.Parse(args)
 
 	siteDir := mustGetwd()
@@ -22,7 +23,7 @@ func runBuild(args []string) {
 	outputDir := filepath.Join(siteDir, *outputFlag)
 
 	start := time.Now()
-	built, err := builder.Build(siteDir, outputDir, *draftsFlag)
+	built, err := builder.Build(siteDir, outputDir, *draftsFlag, *staticFlag)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "build failed: %v\n", err)
 		os.Exit(1)

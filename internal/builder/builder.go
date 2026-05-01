@@ -21,6 +21,13 @@ import (
 // DefaultTemplate is the HTML template used when template.html is not found.
 var DefaultTemplate = themes.Default().Template
 
+// Static errors for builder operations.
+var (
+	errEmptyStaticDirName   = fmt.Errorf("static directory name must not be empty")
+	errStaticDirNotRelative = fmt.Errorf("static directory name must be relative to the site directory")
+	errStaticDirNotDir      = fmt.Errorf("static directory is not a directory")
+)
+
 // PageRef holds the title and URL used to generate navigation links.
 type PageRef struct {
 	Title string
@@ -49,8 +56,11 @@ type TemplateData struct {
 // Top-level pages (pages/*.md) are written to outputDir directly.
 // Section pages (pages/<section>/*.md) are written to outputDir/<section>/.
 // When includeDrafts is false, pages with draft: true in their frontmatter are skipped.
+// staticDir names a directory relative to siteDir whose files are copied into
+// outputDir while preserving directory structure; if it does not exist it is
+// silently skipped.
 // It returns the list of absolute paths of HTML files that were written.
-func Build(siteDir, outputDir string, includeDrafts bool) ([]string, error) {
+func Build(siteDir, outputDir string, includeDrafts bool, staticDir string) ([]string, error) {
 	outputDir, err := filepath.Abs(outputDir)
 	if err != nil {
 		return nil, fmt.Errorf("resolving output dir: %w", err)
@@ -105,6 +115,11 @@ func Build(siteDir, outputDir string, includeDrafts bool) ([]string, error) {
 
 	// Copy non-Markdown files from pages/ to outputDir.
 	if err := copyStaticAssets(siteDir, outputDir); err != nil {
+		return nil, err
+	}
+
+	// Copy the static directory verbatim into the output directory.
+	if err := copyStaticDir(siteDir, outputDir, staticDir); err != nil {
 		return nil, err
 	}
 
@@ -355,6 +370,69 @@ func copyStaticAssets(siteDir, outputDir string) error {
 		dst := filepath.Join(outputDir, rel)
 		if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
 			return fmt.Errorf("creating directory for asset %s: %w", rel, err)
+		}
+		return copyFile(src, dst)
+	})
+}
+
+// validateStaticDirName checks that staticDirName is safe to use as a path
+// component relative to siteDir. It rejects empty values, absolute paths, and
+// names that escape the site directory via "..".
+func validateStaticDirName(staticDirName string) (string, error) {
+	if staticDirName == "" {
+		return "", errEmptyStaticDirName
+	}
+	if filepath.IsAbs(staticDirName) {
+		return "", fmt.Errorf("%w: %s", errStaticDirNotRelative, staticDirName)
+	}
+	clean := filepath.Clean(staticDirName)
+	if clean == "." {
+		return "", errEmptyStaticDirName
+	}
+	if clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("%w: %s", errStaticDirNotRelative, staticDirName)
+	}
+	return clean, nil
+}
+
+// copyStaticDir copies all files from the directory named staticDirName inside
+// siteDir into a same-named subdirectory of outputDir, preserving the directory
+// structure. Symlinks are skipped. If the source directory does not exist the
+// function returns nil silently.
+func copyStaticDir(siteDir, outputDir, staticDirName string) error {
+	cleanName, err := validateStaticDirName(staticDirName)
+	if err != nil {
+		return err
+	}
+	srcDir := filepath.Join(siteDir, cleanName)
+	info, err := os.Stat(srcDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("checking static directory %s: %w", srcDir, err)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("%w: %s", errStaticDirNotDir, srcDir)
+	}
+	dstDir := filepath.Join(outputDir, cleanName)
+	return filepath.WalkDir(srcDir, func(src string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		if d.Type()&os.ModeSymlink != 0 {
+			return nil
+		}
+		rel, err := filepath.Rel(srcDir, src)
+		if err != nil {
+			return err
+		}
+		dst := filepath.Join(dstDir, rel)
+		if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
+			return fmt.Errorf("creating directory for static file %s: %w", rel, err)
 		}
 		return copyFile(src, dst)
 	})
