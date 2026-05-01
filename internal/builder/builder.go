@@ -21,6 +21,13 @@ import (
 // DefaultTemplate is the HTML template used when template.html is not found.
 var DefaultTemplate = themes.Default().Template
 
+// Static errors for builder operations.
+var (
+	errEmptyStaticDirName   = fmt.Errorf("static directory name must not be empty")
+	errStaticDirNotRelative = fmt.Errorf("static directory name must be relative to the site directory")
+	errStaticDirNotDir      = fmt.Errorf("static directory is not a directory")
+)
+
 // PageRef holds the title and URL used to generate navigation links.
 type PageRef struct {
 	Title string
@@ -373,17 +380,17 @@ func copyStaticAssets(siteDir, outputDir string) error {
 // names that escape the site directory via "..".
 func validateStaticDirName(staticDirName string) (string, error) {
 	if staticDirName == "" {
-		return "", fmt.Errorf("static directory name must not be empty")
+		return "", errEmptyStaticDirName
 	}
 	if filepath.IsAbs(staticDirName) {
-		return "", fmt.Errorf("static directory name must be relative to the site directory: %s", staticDirName)
+		return "", fmt.Errorf("%w: %s", errStaticDirNotRelative, staticDirName)
 	}
 	clean := filepath.Clean(staticDirName)
 	if clean == "." {
-		return "", fmt.Errorf("static directory name must not be empty")
+		return "", errEmptyStaticDirName
 	}
 	if clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
-		return "", fmt.Errorf("static directory name must be relative to the site directory: %s", staticDirName)
+		return "", fmt.Errorf("%w: %s", errStaticDirNotRelative, staticDirName)
 	}
 	return clean, nil
 }
@@ -406,7 +413,7 @@ func copyStaticDir(siteDir, outputDir, staticDirName string) error {
 		return fmt.Errorf("checking static directory %s: %w", srcDir, err)
 	}
 	if !info.IsDir() {
-		return fmt.Errorf("static directory %s is not a directory", srcDir)
+		return fmt.Errorf("%w: %s", errStaticDirNotDir, srcDir)
 	}
 	dstDir := filepath.Join(outputDir, cleanName)
 	return filepath.WalkDir(srcDir, func(src string, d os.DirEntry, err error) error {
