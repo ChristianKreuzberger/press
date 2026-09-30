@@ -37,7 +37,7 @@ func main() {
 	args := flag.Args()
 	if len(args) == 0 {
 		flag.Usage()
-		os.Exit(1)
+		os.Exit(exitUsage)
 	}
 
 	switch args[0] {
@@ -62,9 +62,8 @@ func main() {
 	case "check":
 		runCheck(args[1:])
 	default:
-		fmt.Fprintf(os.Stderr, "unknown command: %s\n", args[0])
-		flag.Usage()
-		os.Exit(1)
+		fmt.Fprintf(os.Stderr, "unknown command: %s (run press with no arguments for usage)\n", args[0])
+		os.Exit(exitUsage)
 	}
 }
 
@@ -72,75 +71,30 @@ func mustGetwd() string {
 	dir, err := os.Getwd()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error getting current directory: %v\n", err)
-		os.Exit(1)
+		os.Exit(exitRuntime)
 	}
 	return dir
 }
 
-func nounArg(verb string, args []string) string {
+// dispatchNoun routes "<verb> <page|section> ..." to the matching handler.
+func dispatchNoun(verb string, args []string, page, section func([]string)) {
 	if len(args) == 0 {
 		fmt.Fprintf(os.Stderr, "Usage: press %s <page|section> [args]\n", verb)
-		os.Exit(1)
+		os.Exit(exitUsage)
 	}
-	return args[0]
-}
-
-func runCreate(args []string) {
-	switch nounArg("create", args) {
+	switch args[0] {
 	case "page":
-		runPageCreate(args[1:])
+		page(args[1:])
 	case "section":
-		runSectionCreate(args[1:])
+		section(args[1:])
 	default:
 		fmt.Fprintf(os.Stderr, "unknown noun: %s (expected: page, section)\n", args[0])
-		os.Exit(1)
+		os.Exit(exitUsage)
 	}
 }
 
-func runList(args []string) {
-	switch nounArg("list", args) {
-	case "page":
-		runPageList(args[1:])
-	case "section":
-		runSectionList(args[1:])
-	default:
-		fmt.Fprintf(os.Stderr, "unknown noun: %s (expected: page, section)\n", args[0])
-		os.Exit(1)
-	}
-}
-
-func runUpdate(args []string) {
-	switch nounArg("update", args) {
-	case "page":
-		runPageUpdate(args[1:])
-	case "section":
-		runSectionUpdate(args[1:])
-	default:
-		fmt.Fprintf(os.Stderr, "unknown noun: %s (expected: page, section)\n", args[0])
-		os.Exit(1)
-	}
-}
-
-func runDelete(args []string) {
-	switch nounArg("delete", args) {
-	case "page":
-		runPageDelete(args[1:])
-	case "section":
-		runSectionDelete(args[1:])
-	default:
-		fmt.Fprintf(os.Stderr, "unknown noun: %s (expected: page, section)\n", args[0])
-		os.Exit(1)
-	}
-}
-
-func runRename(args []string) {
-	switch nounArg("rename", args) {
-	case "page":
-		runPageRename(args[1:])
-	case "section":
-		runSectionRename(args[1:])
-	default:
-		fmt.Fprintf(os.Stderr, "unknown noun: %s (expected: page, section)\n", args[0])
-		os.Exit(1)
-	}
-}
+func runCreate(args []string) { dispatchNoun("create", args, runPageCreate, runSectionCreate) }
+func runList(args []string)   { dispatchNoun("list", args, runPageList, runSectionList) }
+func runUpdate(args []string) { dispatchNoun("update", args, runPageUpdate, runSectionUpdate) }
+func runDelete(args []string) { dispatchNoun("delete", args, runPageDelete, runSectionDelete) }
+func runRename(args []string) { dispatchNoun("rename", args, runPageRename, runSectionRename) }

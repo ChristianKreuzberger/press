@@ -1,7 +1,6 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,12 +10,12 @@ import (
 )
 
 func runBuild(args []string) {
-	fs := flag.NewFlagSet("build", flag.ExitOnError)
+	fs := newFlagSet("build")
 	outputFlag := fs.String("output", "dist", "output directory for generated HTML files")
 	draftsFlag := fs.Bool("drafts", false, "include draft pages in the build")
 	verboseFlag := fs.Bool("verbose", false, "print each built page")
 	staticFlag := fs.String("static", "static", "name of the static assets directory to copy into the output")
-	_ = fs.Parse(args)
+	parseOrExit(fs, args, 0, 0, "press build [flags]")
 
 	siteDir := mustGetwd()
 

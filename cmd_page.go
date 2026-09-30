@@ -1,7 +1,6 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"os"
 	"time"
@@ -10,12 +9,15 @@ import (
 	"github.com/ChristianKreuzberger/press/internal/page"
 )
 
-func runPageList(_ []string) {
+func runPageList(args []string) {
+	fs := newFlagSet("list page")
+	parseOrExit(fs, args, 0, 0, "press list page")
+
 	siteDir := mustGetwd()
 	pages, err := page.List(siteDir)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error listing pages: %v\n", err)
-		os.Exit(1)
+		os.Exit(exitRuntime)
 	}
 	if len(pages) == 0 {
 		fmt.Println("no pages found")
@@ -31,16 +33,10 @@ func runPageList(_ []string) {
 }
 
 func runPageCreate(args []string) {
-	// Name is the first positional argument; remaining args may contain flags.
-	if len(args) == 0 {
-		fmt.Fprintf(os.Stderr, "Usage: press create page <name> [--file <file.md>]\n       name may include sections, e.g. blog/my-post or blog/2026/my-post\n")
-		os.Exit(1)
-	}
-	name := args[0]
-
-	fs := flag.NewFlagSet("create page", flag.ExitOnError)
+	fs := newFlagSet("create page")
 	fileFlag := fs.String("file", "", "markdown file to use as page content")
-	_ = fs.Parse(args[1:])
+	pos := parseOrExit(fs, args, 1, 1, "press create page <name> [--file <file.md>]\n       name may include sections, e.g. blog/my-post or blog/2026/my-post")
+	name := pos[0]
 
 	var content []byte
 	if *fileFlag != "" {
@@ -48,7 +44,7 @@ func runPageCreate(args []string) {
 		content, err = os.ReadFile(*fileFlag)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "error reading file %s: %v\n", *fileFlag, err)
-			os.Exit(1)
+			os.Exit(exitRuntime)
 		}
 	} else {
 		content = append(frontmatter.Generate(name, time.Now()), []byte("# "+name+"\n\n")...)
@@ -57,52 +53,45 @@ func runPageCreate(args []string) {
 	siteDir := mustGetwd()
 	if err := page.Create(siteDir, name, content); err != nil {
 		fmt.Fprintf(os.Stderr, "error creating page: %v\n", err)
-		os.Exit(1)
+		os.Exit(exitRuntime)
 	}
 	fmt.Printf("created page %q\n", name)
 }
 
 func runPageDelete(args []string) {
-	if len(args) == 0 {
-		fmt.Fprintf(os.Stderr, "Usage: press delete page <name>\n")
-		os.Exit(1)
-	}
-	name := args[0]
+	fs := newFlagSet("delete page")
+	pos := parseOrExit(fs, args, 1, 1, "press delete page <name>")
+	name := pos[0]
+
 	siteDir := mustGetwd()
 	if err := page.Delete(siteDir, name); err != nil {
 		fmt.Fprintf(os.Stderr, "error deleting page: %v\n", err)
-		os.Exit(1)
+		os.Exit(exitRuntime)
 	}
 	fmt.Printf("deleted page %q\n", name)
 }
 
 func runPageUpdate(args []string) {
-	// Name is the first positional argument; remaining args may contain flags.
-	if len(args) == 0 {
-		fmt.Fprintf(os.Stderr, "Usage: press update page <name> --file <file.md>\n")
-		os.Exit(1)
-	}
-	name := args[0]
-
-	fs := flag.NewFlagSet("update page", flag.ExitOnError)
+	fs := newFlagSet("update page")
 	fileFlag := fs.String("file", "", "markdown file to use as updated page content")
-	_ = fs.Parse(args[1:])
+	pos := parseOrExit(fs, args, 1, 1, "press update page <name> --file <file.md>")
+	name := pos[0]
 
 	if *fileFlag == "" {
 		fmt.Fprintf(os.Stderr, "press update page requires --file\n")
-		os.Exit(1)
+		os.Exit(exitUsage)
 	}
 
 	content, err := os.ReadFile(*fileFlag)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error reading file %s: %v\n", *fileFlag, err)
-		os.Exit(1)
+		os.Exit(exitRuntime)
 	}
 
 	siteDir := mustGetwd()
 	if err := page.Update(siteDir, name, content); err != nil {
 		fmt.Fprintf(os.Stderr, "error updating page: %v\n", err)
-		os.Exit(1)
+		os.Exit(exitRuntime)
 	}
 	fmt.Printf("updated page %q\n", name)
 }
