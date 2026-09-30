@@ -82,9 +82,8 @@ func List(siteDir string) ([]Section, error) {
 		}
 		dir := filepath.Join(base, e.Name())
 		indexPath := filepath.Join(dir, "index.md")
-		if _, err := os.Stat(indexPath); err != nil {
-			if os.IsNotExist(err) {
-				// Directory without index.md is not a valid section.
+		if err := requireSection(dir, e.Name()); err != nil {
+			if errors.Is(err, ErrSectionNotFound) {
 				continue
 			}
 			return nil, err
@@ -114,14 +113,31 @@ func Create(siteDir, name string, content []byte) error {
 	return os.WriteFile(filepath.Join(dir, "index.md"), content, 0644)
 }
 
+// requireSection returns ErrSectionNotFound unless dir contains index.md as a
+// regular file. A directory without it (e.g. a folder of assets) is not a
+// section and must not be modified or removed by section operations.
+func requireSection(dir, name string) error {
+	info, err := os.Stat(filepath.Join(dir, "index.md"))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("%w: %q", ErrSectionNotFound, name)
+		}
+		return err
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("%w: %q", ErrSectionNotFound, name)
+	}
+	return nil
+}
+
 // Delete removes the section directory and all its contents.
 func Delete(siteDir, name string) error {
 	if err := validateName(name); err != nil {
 		return err
 	}
 	dir := sectionDir(siteDir, name)
-	if _, err := os.Stat(dir); os.IsNotExist(err) {
-		return fmt.Errorf("%w: %q", ErrSectionNotFound, name)
+	if err := requireSection(dir, name); err != nil {
+		return err
 	}
 	return os.RemoveAll(dir)
 }
@@ -132,14 +148,10 @@ func Update(siteDir, name string, content []byte) error {
 		return err
 	}
 	dir := sectionDir(siteDir, name)
-	if _, err := os.Stat(dir); os.IsNotExist(err) {
-		return fmt.Errorf("%w: %q", ErrSectionNotFound, name)
+	if err := requireSection(dir, name); err != nil {
+		return err
 	}
-	indexPath := filepath.Join(dir, "index.md")
-	if _, err := os.Stat(indexPath); os.IsNotExist(err) {
-		return fmt.Errorf("%w: %q", ErrSectionNotFound, name)
-	}
-	return os.WriteFile(indexPath, content, 0644)
+	return os.WriteFile(filepath.Join(dir, "index.md"), content, 0644)
 }
 
 // Rename renames the section from oldName to newName.
@@ -155,8 +167,8 @@ func Rename(siteDir, oldName, newName string, now time.Time) error {
 	oldDir := sectionDir(siteDir, oldName)
 	newDir := sectionDir(siteDir, newName)
 
-	if _, err := os.Stat(oldDir); os.IsNotExist(err) {
-		return fmt.Errorf("%w: %q", ErrSectionNotFound, oldName)
+	if err := requireSection(oldDir, oldName); err != nil {
+		return err
 	}
 	if _, err := os.Stat(newDir); err == nil {
 		return fmt.Errorf("%w: %q", ErrSectionExists, newName)
