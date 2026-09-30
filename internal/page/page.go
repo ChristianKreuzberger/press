@@ -77,7 +77,7 @@ func Create(siteDir, name string, content []byte) error {
 	if !strings.HasPrefix(filepath.Clean(path), cleanDir) {
 		return fmt.Errorf("%w: %q", ErrInvalidName, name)
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0750); err != nil {
 		return err
 	}
 	if _, err := os.Stat(path); err == nil {
@@ -143,7 +143,7 @@ func Rename(siteDir, oldName, newName string, now time.Time) error {
 		return fmt.Errorf("%w: %q", ErrPageExists, newName)
 	}
 
-	content, err := os.ReadFile(oldPath)
+	content, err := os.ReadFile(oldPath) //nolint:gosec // oldPath is validated to stay inside the pages dir above
 	if err != nil {
 		return err
 	}
@@ -155,10 +155,10 @@ func Rename(siteDir, oldName, newName string, now time.Time) error {
 	if err != nil {
 		return fmt.Errorf("rename page: %w", err)
 	}
-	if err := os.MkdirAll(filepath.Dir(newPath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(newPath), 0750); err != nil {
 		return err
 	}
-	if err := os.WriteFile(newPath, content, 0644); err != nil {
+	if err := os.WriteFile(newPath, content, 0644); err != nil { //nolint:gosec // newPath is validated to stay inside the pages dir above
 		return err
 	}
 	return os.Remove(oldPath)

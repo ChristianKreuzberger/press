@@ -1,3 +1,4 @@
+// Package frontmatter parses and edits YAML-style frontmatter in markdown files.
 package frontmatter
 
 import (
@@ -98,11 +99,11 @@ func ParseDraft(content []byte) bool {
 // when only the draft flag is needed.
 // Returns false (and no error) when the file has no frontmatter.
 func ParseDraftFromFile(path string) (bool, error) {
-	f, err := os.Open(path)
+	f, err := os.Open(path) //nolint:gosec // path is a page file discovered under the site directory
 	if err != nil {
 		return false, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }() // read-only file, close error is not actionable
 
 	scanner := bufio.NewScanner(f)
 

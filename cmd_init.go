@@ -41,7 +41,7 @@ func runInit(args []string) {
 
 	pagesDir := filepath.Join(siteDir, "pages")
 	if _, err := os.Stat(pagesDir); os.IsNotExist(err) {
-		if err := os.MkdirAll(pagesDir, 0755); err != nil {
+		if err := os.MkdirAll(pagesDir, 0750); err != nil {
 			fmt.Fprintf(os.Stderr, "error creating pages directory: %v\n", err)
 			os.Exit(1)
 		}
