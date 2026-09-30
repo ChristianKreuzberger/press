@@ -60,6 +60,7 @@ When you request code changes (features, bug fixes, refactoring), the workflow a
 
 - Keep external dependencies minimal; prefer the Go standard library.
 - All public functions must have tests.
+- Every change must ship with a usage example or, preferably, an e2e test (see [`CONTRIBUTING.md`](CONTRIBUTING.md)). No exceptions for agent-made changes; docs-only/CI-only changes state "n/a" with a reason.
 - Follow standard Go formatting (`gofmt`).
 - Commit messages should be short and descriptive.
 - Do not commit secrets or credentials.
@@ -67,6 +68,7 @@ When you request code changes (features, bug fixes, refactoring), the workflow a
 
 ## When creating PRs
 
+- Include a usage example (command + real output) or point to the e2e test that covers the change
 - Demonstrate the impact to the user, if any (e.g., new CLI command, updated existing command, with example input and output)
 - Fill out the [PULL_REQUEST_TEMPLATE](.github/PULL_REQUEST_TEMPLATE.md)
 - Let me know if you skipped something, something was unclear, or you had to deviate from the plan
