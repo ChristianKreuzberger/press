@@ -5,10 +5,11 @@ linters:
     - gocritic
     - godot
     - err113
-  settings:
-    gosec:
-      excludes:
-        - G306 # WriteFile with 0644 is intentional for web content files readable by all
+
+linters-settings:
+  gosec:
+    excludes:
+      - G306 # WriteFile with 0644 is intentional for web content files readable by all
 
 issues:
   exclude-rules:
