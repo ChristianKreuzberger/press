@@ -1206,3 +1206,148 @@ func TestBuildStaticDirInvalidName(t *testing.T) {
 		t.Fatal("expected Build to fail for traversal static dir name, got nil")
 	}
 }
+
+func TestBuildSkipsSymlinkedAssets(t *testing.T) {
+	siteDir := t.TempDir()
+	outDir := filepath.Join(siteDir, "dist")
+	if err := page.Create(siteDir, "index", []byte("# Home\n")); err != nil {
+		t.Fatal(err)
+	}
+	outside := t.TempDir()
+	secret := filepath.Join(outside, "secret.txt")
+	if err := os.WriteFile(secret, []byte("secret"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	pagesDir := filepath.Join(siteDir, "pages")
+	if err := os.Symlink(secret, filepath.Join(pagesDir, "leak.txt")); err != nil {
+		t.Skipf("symlinks not supported: %v", err)
+	}
+	if err := os.Symlink(outside, filepath.Join(pagesDir, "linkdir")); err != nil {
+		t.Skipf("symlinks not supported: %v", err)
+	}
+
+	if _, err := Build(siteDir, outDir, false, "static"); err != nil {
+		t.Fatalf("Build failed: %v", err)
+	}
+	for _, p := range []string{"leak.txt", "linkdir"} {
+		if _, err := os.Lstat(filepath.Join(outDir, p)); err == nil {
+			t.Errorf("expected dist/%s not to exist", p)
+		}
+	}
+}
+
+func TestBuildSkipsDotfilesAndDotDirs(t *testing.T) {
+	siteDir := t.TempDir()
+	outDir := filepath.Join(siteDir, "dist")
+	if err := page.Create(siteDir, "index", []byte("# Home\n")); err != nil {
+		t.Fatal(err)
+	}
+	pagesDir := filepath.Join(siteDir, "pages")
+	if err := os.WriteFile(filepath.Join(pagesDir, ".DS_Store"), []byte("x"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(pagesDir, ".git"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(pagesDir, ".git", "config"), []byte("x"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(pagesDir, "keep.txt"), []byte("k"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := Build(siteDir, outDir, false, "static"); err != nil {
+		t.Fatalf("Build failed: %v", err)
+	}
+	for _, p := range []string{".DS_Store", ".git"} {
+		if _, err := os.Stat(filepath.Join(outDir, p)); err == nil {
+			t.Errorf("expected dist/%s not to exist", p)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(outDir, "keep.txt")); err != nil {
+		t.Errorf("expected dist/keep.txt to exist: %v", err)
+	}
+}
+
+func TestBuildDoesNotCopyUppercaseMarkdownAsAsset(t *testing.T) {
+	siteDir := t.TempDir()
+	outDir := filepath.Join(siteDir, "dist")
+	if err := page.Create(siteDir, "index", []byte("# Home\n")); err != nil {
+		t.Fatal(err)
+	}
+	pagesDir := filepath.Join(siteDir, "pages")
+	for _, n := range []string{"notes.MD", "other.Md"} {
+		if err := os.WriteFile(filepath.Join(pagesDir, n), []byte("# N\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if _, err := Build(siteDir, outDir, false, "static"); err != nil {
+		t.Fatalf("Build failed: %v", err)
+	}
+	for _, p := range []string{"notes.MD", "other.Md", "notes.html", "other.html"} {
+		if _, err := os.Stat(filepath.Join(outDir, p)); err == nil {
+			t.Errorf("expected dist/%s not to exist", p)
+		}
+	}
+}
+
+func TestBuildFailsWhenAssetCollidesWithPage(t *testing.T) {
+	siteDir := t.TempDir()
+	outDir := filepath.Join(siteDir, "dist")
+	if err := page.Create(siteDir, "about", []byte("# About\n")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(siteDir, "pages", "about.html"), []byte("evil"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := Build(siteDir, outDir, false, "static")
+	if err == nil {
+		t.Fatal("expected collision error")
+	}
+	if !strings.Contains(err.Error(), "about.html") || !strings.Contains(err.Error(), "collides") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestBuildFailsWhenAssetCollidesWithSectionPage(t *testing.T) {
+	siteDir := t.TempDir()
+	outDir := filepath.Join(siteDir, "dist")
+	if err := section.Create(siteDir, "blog", []byte("# Blog\n")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(siteDir, "pages", "blog", "index.html"), []byte("evil"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := Build(siteDir, outDir, false, "static")
+	if err == nil {
+		t.Fatal("expected collision error")
+	}
+	if !strings.Contains(err.Error(), "blog/index.html") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestBuildNoCollisionWithDraftPage(t *testing.T) {
+	siteDir := t.TempDir()
+	outDir := filepath.Join(siteDir, "dist")
+	if err := page.Create(siteDir, "index", []byte("# Home\n")); err != nil {
+		t.Fatal(err)
+	}
+	if err := page.Create(siteDir, "wip", []byte("---\ndraft: true\n---\n# WIP\n")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(siteDir, "pages", "wip.html"), []byte("asset"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := Build(siteDir, outDir, false, "static"); err != nil {
+		t.Fatalf("Build failed: %v", err)
+	}
+	got, err := os.ReadFile(filepath.Join(outDir, "wip.html"))
+	if err != nil || string(got) != "asset" {
+		t.Errorf("expected asset wip.html copied, got %q, %v", got, err)
+	}
+}

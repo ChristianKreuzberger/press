@@ -2,6 +2,7 @@
 package builder
 
 import (
+	"errors"
 	"fmt"
 	"html/template"
 	"io"
@@ -113,12 +114,8 @@ func Build(siteDir, outputDir string, includeDrafts bool, staticDir string) ([]s
 		built = append(built, outPath)
 	}
 
-	// Copy non-Markdown files from pages/ to outputDir.
-	if err := copyStaticAssets(siteDir, outputDir); err != nil {
-		return nil, err
-	}
-
-	// Copy the static directory verbatim into the output directory.
+	// Copy the static directory verbatim into the output directory. Kept before
+	// section pages so built pages still win over static files as before.
 	if err := copyStaticDir(siteDir, outputDir, staticDir); err != nil {
 		return nil, err
 	}
@@ -160,6 +157,12 @@ func Build(siteDir, outputDir string, includeDrafts bool, staticDir string) ([]s
 			}
 			built = append(built, outPath)
 		}
+	}
+
+	// Copy assets only after all pages are built so collisions with any built
+	// page (including section pages) can be detected.
+	if err := copyStaticAssets(siteDir, outputDir, built); err != nil {
+		return nil, err
 	}
 	return built, nil
 }
@@ -346,21 +349,41 @@ func buildPageFromPath(name, mdPath, outPath string, pageRefs []PageRef, toc []T
 	return nil
 }
 
+// errAssetCollision is returned when an asset would overwrite a built page.
+var errAssetCollision = errors.New("collides with a built page")
+
 // copyStaticAssets copies all non-Markdown files from the pages/ directory
 // to the corresponding location in outputDir, preserving the directory structure.
-func copyStaticAssets(siteDir, outputDir string) error {
+// Symlinks and other non-regular files, dotfiles and dot-directories are skipped.
+// Markdown files (any case) are never copied. It fails if an asset would
+// overwrite one of the built page paths.
+func copyStaticAssets(siteDir, outputDir string, builtPaths []string) error {
 	pagesDir := page.PagesDir(siteDir)
 	if _, err := os.Stat(pagesDir); os.IsNotExist(err) {
 		return nil
+	}
+	built := make(map[string]bool, len(builtPaths))
+	for _, p := range builtPaths {
+		built[filepath.Clean(p)] = true
 	}
 	return filepath.WalkDir(pagesDir, func(src string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
+		if src != pagesDir && strings.HasPrefix(d.Name(), ".") {
+			if d.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
 		if d.IsDir() {
 			return nil
 		}
-		if strings.HasSuffix(d.Name(), ".md") {
+		// Skips symlinks so assets cannot pull in files from outside pages/.
+		if !d.Type().IsRegular() {
+			return nil
+		}
+		if strings.EqualFold(filepath.Ext(d.Name()), ".md") {
 			return nil
 		}
 		rel, err := filepath.Rel(pagesDir, src)
@@ -368,6 +391,9 @@ func copyStaticAssets(siteDir, outputDir string) error {
 			return err
 		}
 		dst := filepath.Join(outputDir, rel)
+		if built[dst] {
+			return fmt.Errorf("asset %s: %w", filepath.ToSlash(rel), errAssetCollision)
+		}
 		if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
 			return fmt.Errorf("creating directory for asset %s: %w", rel, err)
 		}
