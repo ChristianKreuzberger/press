@@ -108,7 +108,7 @@ func Create(siteDir, name string, content []byte) error {
 	if _, err := os.Stat(dir); err == nil {
 		return fmt.Errorf("%w: %q", ErrSectionExists, name)
 	}
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0750); err != nil {
 		return err
 	}
 	return os.WriteFile(filepath.Join(dir, "index.md"), content, 0644)
@@ -163,7 +163,7 @@ func Rename(siteDir, oldName, newName string, now time.Time) error {
 	}
 
 	indexPath := filepath.Join(oldDir, "index.md")
-	content, err := os.ReadFile(indexPath)
+	content, err := os.ReadFile(indexPath) //nolint:gosec // oldName is checked by validateName, so the path stays inside the pages dir
 	if err != nil {
 		return err
 	}
@@ -178,7 +178,7 @@ func Rename(siteDir, oldName, newName string, now time.Time) error {
 	if err := os.Rename(oldDir, newDir); err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(newDir, "index.md"), content, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(newDir, "index.md"), content, 0644); err != nil { //nolint:gosec // newName is checked by validateName, so the path stays inside the pages dir
 		// Roll back the directory rename to avoid a half-applied state.
 		_ = os.Rename(newDir, oldDir)
 		return err

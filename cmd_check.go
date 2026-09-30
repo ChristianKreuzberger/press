@@ -97,7 +97,7 @@ func runCheck(args []string) {
 			pageCount++
 			relPath := sectionName + "/" + sf.Name()
 			fullPath := filepath.Join(sectionPath, sf.Name())
-			content, err := os.ReadFile(fullPath)
+			content, err := os.ReadFile(fullPath) //nolint:gosec // path is built from directory entries under the site pages dir
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "error reading %s: %v\n", relPath, err)
 				os.Exit(1)

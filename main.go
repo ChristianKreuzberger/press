@@ -1,3 +1,4 @@
+// Command press is a CLI tool for generating static websites.
 package main
 
 import (

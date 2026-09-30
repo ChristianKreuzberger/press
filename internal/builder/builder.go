@@ -91,7 +91,7 @@ func Build(siteDir, outputDir string, includeDrafts bool, staticDir string) ([]s
 		return nil, fmt.Errorf("building nav refs: %w", err)
 	}
 
-	if err := os.MkdirAll(outputDir, 0755); err != nil {
+	if err := os.MkdirAll(outputDir, 0755); err != nil { //nolint:gosec // generated site output must be world-readable for web servers
 		return nil, fmt.Errorf("creating output directory: %w", err)
 	}
 
@@ -179,7 +179,7 @@ func buildSection(s section.Section, siteDir, outputDir string, sectionNavRefs [
 	}
 
 	sectionOutDir := filepath.Join(outputDir, s.Name)
-	if err := os.MkdirAll(sectionOutDir, 0755); err != nil {
+	if err := os.MkdirAll(sectionOutDir, 0755); err != nil { //nolint:gosec // generated site output must be world-readable for web servers
 		return nil, fmt.Errorf("creating section output directory %s: %w", sectionOutDir, err)
 	}
 
@@ -353,8 +353,8 @@ func sortTOC(entries []TOCEntry, by, order string) {
 	})
 }
 
-func buildPageFromPath(name, mdPath, outPath string, pageRefs []PageRef, toc []TOCEntry, tmpl *template.Template) error {
-	mdContent, err := os.ReadFile(mdPath)
+func buildPageFromPath(name, mdPath, outPath string, pageRefs []PageRef, toc []TOCEntry, tmpl *template.Template) (err error) {
+	mdContent, err := os.ReadFile(mdPath) //nolint:gosec // mdPath comes from walking the site pages dir
 	if err != nil {
 		return fmt.Errorf("reading page %s: %w", name, err)
 	}
@@ -373,11 +373,16 @@ func buildPageFromPath(name, mdPath, outPath string, pageRefs []PageRef, toc []T
 		TableOfContents: toc,
 	}
 
-	f, err := os.Create(outPath)
+	f, err := os.Create(outPath) //nolint:gosec // outPath is inside the build output dir
 	if err != nil {
 		return fmt.Errorf("creating output file %s: %w", outPath, err)
 	}
-	defer f.Close()
+	// A failed close on a written file can mean lost data, so surface it.
+	defer func() {
+		if cerr := f.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("closing output file %s: %w", outPath, cerr)
+		}
+	}()
 
 	if err := tmpl.Execute(f, data); err != nil {
 		return fmt.Errorf("executing template for page %s: %w", name, err)
@@ -407,7 +412,7 @@ func copyStaticAssets(siteDir, outputDir string) error {
 			return err
 		}
 		dst := filepath.Join(outputDir, rel)
-		if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil { //nolint:gosec // generated site output must be world-readable for web servers
 			return fmt.Errorf("creating directory for asset %s: %w", rel, err)
 		}
 		return copyFile(src, dst)
@@ -470,7 +475,7 @@ func copyStaticDir(siteDir, outputDir, staticDirName string) error {
 			return err
 		}
 		dst := filepath.Join(dstDir, rel)
-		if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil { //nolint:gosec // generated site output must be world-readable for web servers
 			return fmt.Errorf("creating directory for static file %s: %w", rel, err)
 		}
 		return copyFile(src, dst)
@@ -478,18 +483,23 @@ func copyStaticDir(siteDir, outputDir, staticDirName string) error {
 }
 
 // copyFile copies the file at src to dst.
-func copyFile(src, dst string) error {
-	in, err := os.Open(src)
+func copyFile(src, dst string) (err error) {
+	in, err := os.Open(src) //nolint:gosec // src comes from walking the site directory
 	if err != nil {
 		return fmt.Errorf("opening asset %s: %w", src, err)
 	}
-	defer in.Close()
+	defer func() { _ = in.Close() }() // read-only file, close error is not actionable
 
-	out, err := os.Create(dst)
+	out, err := os.Create(dst) //nolint:gosec // dst is inside the build output dir
 	if err != nil {
 		return fmt.Errorf("creating asset %s: %w", dst, err)
 	}
-	defer out.Close()
+	// A failed close on a written file can mean lost data, so surface it.
+	defer func() {
+		if cerr := out.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("closing asset %s: %w", dst, cerr)
+		}
+	}()
 
 	if _, err := io.Copy(out, in); err != nil {
 		return fmt.Errorf("copying asset %s: %w", dst, err)
@@ -499,7 +509,7 @@ func copyFile(src, dst string) error {
 
 func readTemplate(siteDir string) (string, error) {
 	path := filepath.Join(siteDir, "template.html")
-	content, err := os.ReadFile(path)
+	content, err := os.ReadFile(path) //nolint:gosec // fixed filename inside the user-supplied site dir
 	if err != nil {
 		if os.IsNotExist(err) {
 			return DefaultTemplate, nil
