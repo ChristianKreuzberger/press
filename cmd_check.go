@@ -2,7 +2,9 @@ package main
 
 import (
 	"fmt"
+	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -11,10 +13,16 @@ import (
 	"github.com/ChristianKreuzberger/press/internal/page"
 )
 
-// internalLinkRe matches Markdown links whose destination starts with "/".
-// Group 1 is "!" for image links (to be skipped), group 2 is the link text,
-// and group 3 is the destination.
-var internalLinkRe = regexp.MustCompile(`(!?)\[([^\]]*)\]\((/[^)]*)\)`)
+// linkStartRe matches the start of a Markdown inline link, up to and including
+// the "(" before the destination. Group 1 is "!" for image links.
+var linkStartRe = regexp.MustCompile(`(!?)\[[^\]]*\]\(`)
+
+// inlineCodeRe matches inline code spans so links inside them can be ignored.
+var inlineCodeRe = regexp.MustCompile("`[^`\n]*`")
+
+// defaultStaticDir is the static directory `press build` uses by default;
+// `press check` takes no flags, so it assumes this one.
+const defaultStaticDir = "static"
 
 func runCheck(args []string) {
 	parseOrExit(newFlagSet("check"), args, 0, 0, "press check")
@@ -25,7 +33,7 @@ func runCheck(args []string) {
 	pageCount := 0
 
 	// Build the set of valid internal link paths.
-	validPaths := buildValidPaths(pagesDir)
+	validPaths := buildValidPaths(siteDir)
 
 	// Check top-level pages.
 	topPages, err := page.List(siteDir)
@@ -134,18 +142,10 @@ func checkPage(relPath string, content []byte, validPaths map[string]bool) []str
 		issues = append(issues, fmt.Sprintf("%s: empty page content", relPath))
 	}
 
-	// Check for broken internal links (absolute paths starting with "/").
-	for _, m := range internalLinkRe.FindAllStringSubmatch(string(content), -1) {
-		if m[1] == "!" {
-			continue // skip image links
-		}
-		dest := m[3]
-		// Strip fragment.
-		if idx := strings.IndexByte(dest, '#'); idx >= 0 {
-			dest = dest[:idx]
-		}
-		// Strip query string.
-		if idx := strings.IndexByte(dest, '?'); idx >= 0 {
+	// Check for broken internal links (site-absolute paths starting with "/").
+	for _, dest := range internalLinks(string(content)) {
+		// Strip fragment and query string.
+		if idx := strings.IndexAny(dest, "#?"); idx >= 0 {
 			dest = dest[:idx]
 		}
 		// Normalise trailing slash: "/" alone maps to the index page.
@@ -153,6 +153,10 @@ func checkPage(relPath string, content []byte, validPaths map[string]bool) []str
 		if dest == "" {
 			dest = "/index"
 		}
+		if u, err := url.PathUnescape(dest); err == nil {
+			dest = u
+		}
+		dest = path.Clean(dest)
 		if !validPaths[dest] {
 			issues = append(issues, fmt.Sprintf("%s: broken link → %s (page not found)", relPath, dest))
 		}
@@ -161,10 +165,94 @@ func checkPage(relPath string, content []byte, validPaths map[string]bool) []str
 	return issues
 }
 
+// internalLinks returns the destinations of all non-image Markdown links in
+// content that are site-absolute paths (a single leading "/"). Links inside
+// fenced code blocks and inline code spans are ignored, as are external,
+// scheme and protocol-relative ("//host") links.
+func internalLinks(content string) []string {
+	var prose []string
+	var fence string // the opening fence marker while inside a fenced block
+	for _, line := range strings.Split(content, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if fence != "" {
+			// A closing fence is at least as long as the opener and has no info string.
+			if strings.HasPrefix(trimmed, fence) && strings.Trim(trimmed, fence[:1]) == "" {
+				fence = ""
+			}
+			continue
+		}
+		if strings.HasPrefix(trimmed, "```") || strings.HasPrefix(trimmed, "~~~") {
+			fence = strings.Repeat(trimmed[:1], len(trimmed)-len(strings.TrimLeft(trimmed, trimmed[:1])))
+			continue
+		}
+		prose = append(prose, inlineCodeRe.ReplaceAllString(line, ""))
+	}
+	text := strings.Join(prose, "\n")
+
+	var links []string
+	for _, m := range linkStartRe.FindAllStringSubmatchIndex(text, -1) {
+		if text[m[2]:m[3]] == "!" {
+			continue // skip image links
+		}
+		dest := linkDestination(text[m[1]:])
+		if strings.HasPrefix(dest, "/") && !strings.HasPrefix(dest, "//") {
+			links = append(links, dest)
+		}
+	}
+	return links
+}
+
+// linkDestination parses a link destination from s, which starts right after
+// the "(" of an inline link. It accepts "<...>" destinations and bare ones
+// with balanced parentheses, and stops at whitespace so an optional title
+// ("...") is left out.
+func linkDestination(s string) string {
+	s = strings.TrimLeft(s, " \t")
+	if strings.HasPrefix(s, "<") {
+		if end := strings.IndexAny(s, ">\n"); end > 0 && s[end] == '>' {
+			return s[1:end]
+		}
+		return ""
+	}
+	depth := 0
+	for i := 0; i < len(s); i++ {
+		switch s[i] {
+		case ' ', '\t', '\n':
+			return s[:i]
+		case '(':
+			depth++
+		case ')':
+			if depth == 0 {
+				return s[:i]
+			}
+			depth--
+		}
+	}
+	return s
+}
+
 // buildValidPaths returns the set of internal link paths that resolve to an
-// existing page. Paths are slash-prefixed (e.g. "/about", "/blog", "/blog/first-post").
-func buildValidPaths(pagesDir string) map[string]bool {
+// existing page or file. Paths are slash-prefixed (e.g. "/about", "/blog",
+// "/blog/first-post", "/docs/f.pdf").
+func buildValidPaths(siteDir string) map[string]bool {
+	pagesDir := page.PagesDir(siteDir)
 	valid := make(map[string]bool)
+
+	// Files the builder copies verbatim to the output root: the static dir and
+	// non-Markdown files under pages/.
+	addFiles := func(root string, skipMarkdown bool) {
+		_ = filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
+			if err != nil || d.IsDir() || (skipMarkdown && strings.HasSuffix(d.Name(), ".md")) {
+				return nil //nolint:nilerr // a missing or unreadable dir just means no files to link to
+			}
+			if rel, err := filepath.Rel(root, p); err == nil {
+				valid["/"+filepath.ToSlash(rel)] = true
+			}
+			return nil
+		})
+	}
+	addFiles(filepath.Join(siteDir, defaultStaticDir), false)
+	addFiles(pagesDir, true)
 
 	entries, err := os.ReadDir(pagesDir)
 	if err != nil {
@@ -180,6 +268,7 @@ func buildValidPaths(pagesDir string) map[string]bool {
 			if _, err := os.Stat(indexPath); err == nil {
 				valid["/"+name] = true
 				valid["/"+name+"/index"] = true
+				valid["/"+name+"/index.html"] = true
 			}
 			// Sub-pages within the section.
 			subEntries, err := os.ReadDir(sectionPath)
@@ -188,12 +277,14 @@ func buildValidPaths(pagesDir string) map[string]bool {
 					if !se.IsDir() && strings.HasSuffix(se.Name(), ".md") {
 						pageName := strings.TrimSuffix(se.Name(), ".md")
 						valid["/"+name+"/"+pageName] = true
+						valid["/"+name+"/"+pageName+".html"] = true
 					}
 				}
 			}
 		} else if strings.HasSuffix(e.Name(), ".md") {
 			pageName := strings.TrimSuffix(e.Name(), ".md")
 			valid["/"+pageName] = true
+			valid["/"+pageName+".html"] = true
 		}
 	}
 
