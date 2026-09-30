@@ -10,29 +10,27 @@ import (
 )
 
 func runPageRename(args []string) {
-	if len(args) < 2 {
-		fmt.Fprintf(os.Stderr, "Usage: press rename page <old-name> <new-name>\n")
-		os.Exit(1)
-	}
-	oldName, newName := args[0], args[1]
+	fs := newFlagSet("rename page")
+	pos := parseOrExit(fs, args, 2, 2, "press rename page <old-name> <new-name>")
+	oldName, newName := pos[0], pos[1]
+
 	siteDir := mustGetwd()
 	if err := page.Rename(siteDir, oldName, newName, time.Now()); err != nil {
 		fmt.Fprintf(os.Stderr, "error renaming page: %v\n", err)
-		os.Exit(1)
+		os.Exit(exitRuntime)
 	}
 	fmt.Printf("renamed page %q to %q\n", oldName, newName)
 }
 
 func runSectionRename(args []string) {
-	if len(args) < 2 {
-		fmt.Fprintf(os.Stderr, "Usage: press rename section <old-name> <new-name>\n")
-		os.Exit(1)
-	}
-	oldName, newName := args[0], args[1]
+	fs := newFlagSet("rename section")
+	pos := parseOrExit(fs, args, 2, 2, "press rename section <old-name> <new-name>")
+	oldName, newName := pos[0], pos[1]
+
 	siteDir := mustGetwd()
 	if err := section.Rename(siteDir, oldName, newName, time.Now()); err != nil {
 		fmt.Fprintf(os.Stderr, "error renaming section: %v\n", err)
-		os.Exit(1)
+		os.Exit(exitRuntime)
 	}
 	fmt.Printf("renamed section %q to %q\n", oldName, newName)
 }

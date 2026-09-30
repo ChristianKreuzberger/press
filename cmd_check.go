@@ -16,7 +16,8 @@ import (
 // and group 3 is the destination.
 var internalLinkRe = regexp.MustCompile(`(!?)\[([^\]]*)\]\((/[^)]*)\)`)
 
-func runCheck(_ []string) {
+func runCheck(args []string) {
+	parseOrExit(newFlagSet("check"), args, 0, 0, "press check")
 	siteDir := mustGetwd()
 	pagesDir := page.PagesDir(siteDir)
 

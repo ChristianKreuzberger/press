@@ -1,7 +1,6 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"os"
 	"time"
@@ -10,12 +9,15 @@ import (
 	"github.com/ChristianKreuzberger/press/internal/section"
 )
 
-func runSectionList(_ []string) {
+func runSectionList(args []string) {
+	fs := newFlagSet("list section")
+	parseOrExit(fs, args, 0, 0, "press list section")
+
 	siteDir := mustGetwd()
 	sections, err := section.List(siteDir)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error listing sections: %v\n", err)
-		os.Exit(1)
+		os.Exit(exitRuntime)
 	}
 	if len(sections) == 0 {
 		fmt.Println("no sections found")
@@ -27,15 +29,10 @@ func runSectionList(_ []string) {
 }
 
 func runSectionCreate(args []string) {
-	if len(args) == 0 {
-		fmt.Fprintf(os.Stderr, "Usage: press create section <name> [--file <file.md>]\n")
-		os.Exit(1)
-	}
-	name := args[0]
-
-	fs := flag.NewFlagSet("create section", flag.ExitOnError)
+	fs := newFlagSet("create section")
 	fileFlag := fs.String("file", "", "markdown file to use as the section index content")
-	_ = fs.Parse(args[1:])
+	pos := parseOrExit(fs, args, 1, 1, "press create section <name> [--file <file.md>]")
+	name := pos[0]
 
 	var content []byte
 	if *fileFlag != "" {
@@ -43,7 +40,7 @@ func runSectionCreate(args []string) {
 		content, err = os.ReadFile(*fileFlag)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "error reading file %s: %v\n", *fileFlag, err)
-			os.Exit(1)
+			os.Exit(exitRuntime)
 		}
 	} else {
 		content = append(frontmatter.GenerateSection(name, time.Now()), []byte("# "+name+"\n\n")...)
@@ -52,51 +49,45 @@ func runSectionCreate(args []string) {
 	siteDir := mustGetwd()
 	if err := section.Create(siteDir, name, content); err != nil {
 		fmt.Fprintf(os.Stderr, "error creating section: %v\n", err)
-		os.Exit(1)
+		os.Exit(exitRuntime)
 	}
 	fmt.Printf("created section %q\n", name)
 }
 
 func runSectionDelete(args []string) {
-	if len(args) == 0 {
-		fmt.Fprintf(os.Stderr, "Usage: press delete section <name>\n")
-		os.Exit(1)
-	}
-	name := args[0]
+	fs := newFlagSet("delete section")
+	pos := parseOrExit(fs, args, 1, 1, "press delete section <name>")
+	name := pos[0]
+
 	siteDir := mustGetwd()
 	if err := section.Delete(siteDir, name); err != nil {
 		fmt.Fprintf(os.Stderr, "error deleting section: %v\n", err)
-		os.Exit(1)
+		os.Exit(exitRuntime)
 	}
 	fmt.Printf("deleted section %q\n", name)
 }
 
 func runSectionUpdate(args []string) {
-	if len(args) == 0 {
-		fmt.Fprintf(os.Stderr, "Usage: press update section <name> --file <file.md>\n")
-		os.Exit(1)
-	}
-	name := args[0]
-
-	fs := flag.NewFlagSet("update section", flag.ExitOnError)
+	fs := newFlagSet("update section")
 	fileFlag := fs.String("file", "", "markdown file to use as updated section index content")
-	_ = fs.Parse(args[1:])
+	pos := parseOrExit(fs, args, 1, 1, "press update section <name> --file <file.md>")
+	name := pos[0]
 
 	if *fileFlag == "" {
 		fmt.Fprintf(os.Stderr, "press update section requires --file\n")
-		os.Exit(1)
+		os.Exit(exitUsage)
 	}
 
 	content, err := os.ReadFile(*fileFlag)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error reading file %s: %v\n", *fileFlag, err)
-		os.Exit(1)
+		os.Exit(exitRuntime)
 	}
 
 	siteDir := mustGetwd()
 	if err := section.Update(siteDir, name, content); err != nil {
 		fmt.Fprintf(os.Stderr, "error updating section: %v\n", err)
-		os.Exit(1)
+		os.Exit(exitRuntime)
 	}
 	fmt.Printf("updated section %q\n", name)
 }

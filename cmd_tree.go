@@ -9,7 +9,8 @@ import (
 	"github.com/ChristianKreuzberger/press/internal/section"
 )
 
-func runTree(_ []string) {
+func runTree(args []string) {
+	parseOrExit(newFlagSet("tree"), args, 0, 0, "press tree")
 	siteDir := mustGetwd()
 
 	pages, err := page.List(siteDir)
