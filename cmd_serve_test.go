@@ -3,9 +3,64 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
+
+func TestListenAddr(t *testing.T) {
+	tests := []struct {
+		name string
+		host string
+		port int
+		want string
+	}{
+		{"default host", defaultServeHost, 8080, "127.0.0.1:8080"},
+		{"empty falls back to default", "", 8080, "127.0.0.1:8080"},
+		{"whitespace falls back to default", "  ", 9000, "127.0.0.1:9000"},
+		{"all interfaces", "0.0.0.0", 3000, "0.0.0.0:3000"},
+		{"hostname", "localhost", 8080, "localhost:8080"},
+		{"ipv6 bare", "::1", 8080, "[::1]:8080"},
+		{"ipv6 bracketed", "[::1]", 8080, "[::1]:8080"},
+		{"trims spaces", " 127.0.0.1 ", 8080, "127.0.0.1:8080"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := listenAddr(tt.host, tt.port)
+			if got != tt.want {
+				t.Errorf("listenAddr(%q, %d) = %q, want %q", tt.host, tt.port, got, tt.want)
+			}
+			if strings.HasPrefix(got, ":") {
+				t.Errorf("listenAddr(%q, %d) = %q must not bind all interfaces", tt.host, tt.port, got)
+			}
+		})
+	}
+}
+
+func TestIsLoopbackHost(t *testing.T) {
+	tests := []struct {
+		host string
+		want bool
+	}{
+		{"", true},
+		{"localhost", true},
+		{"127.0.0.1", true},
+		{"127.0.0.2", true},
+		{"::1", true},
+		{"[::1]", true},
+		{"0.0.0.0", false},
+		{"::", false},
+		{"192.168.1.10", false},
+		{"example.com", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.host, func(t *testing.T) {
+			if got := isLoopbackHost(tt.host); got != tt.want {
+				t.Errorf("isLoopbackHost(%q) = %v, want %v", tt.host, got, tt.want)
+			}
+		})
+	}
+}
 
 func TestCollectFileStates_ReturnsFiles(t *testing.T) {
 	dir := t.TempDir()

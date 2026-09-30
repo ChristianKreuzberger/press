@@ -67,7 +67,8 @@ press serve
 | `press rename section <old> <new>` | Rename a section; updates title and `updated_at` in its `index.md` |
 | `press build [-output dir] [--static dir]` | Build the site into `dist/` (default); draft pages are skipped |
 | `press build --drafts [-output dir]` | Build including draft pages |
-| `press serve [-port N] [-output dir] [--static dir]` | Build and serve the site locally; rebuilds on file changes |
+| `press serve [-port N] [-host addr] [-output dir] [--static dir]` | Build and serve the site locally (listens on 127.0.0.1 by default); rebuilds on file changes |
+| `press serve --host 0.0.0.0` | Expose the dev server to your network (prints a warning) |
 | `press serve --drafts` | Serve including draft pages |
 | `press tree` | Show a tree of all pages and sections; draft pages are marked `[draft]` |
 | `press check` | Validate pages and internal links; exits with code 1 if issues are found |
