@@ -75,6 +75,8 @@ press serve
 
 Run any command with `--help` for detailed usage.
 
+Exit codes: `0` success, `1` runtime error (including `check` finding issues), `2` usage error (bad flags or arguments).
+
 ---
 
 ## Why press?

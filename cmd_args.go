@@ -52,7 +52,7 @@ func consumedDoubleDash(args, rest []string) bool {
 
 // parseOrExit parses args and enforces the positional count. It exits 0 for
 // -h/--help and 2 for any usage error.
-func parseOrExit(fs *flag.FlagSet, args []string, min, max int, usage string) []string {
+func parseOrExit(fs *flag.FlagSet, args []string, minPos, maxPos int, usage string) []string {
 	pos, err := parseArgs(fs, args)
 	if err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -60,7 +60,7 @@ func parseOrExit(fs *flag.FlagSet, args []string, min, max int, usage string) []
 		}
 		os.Exit(exitUsage)
 	}
-	if len(pos) < min || len(pos) > max {
+	if len(pos) < minPos || len(pos) > maxPos {
 		fmt.Fprintf(os.Stderr, "Usage: %s\n", usage)
 		os.Exit(exitUsage)
 	}
