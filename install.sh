@@ -6,15 +6,26 @@
 #
 # The script will:
 #   1. Detect your OS and architecture.
-#   2. Fetch the latest release tag from the GitHub API.
-#   3. Download and extract the correct tarball.
+#   2. Use $VERSION (e.g. VERSION=v0.1.0) or fetch the latest release tag from
+#      the GitHub API.
+#   3. Download the archive and the release's checksums.txt, and verify the
+#      SHA-256 checksum before extracting anything.
 #   4. Install the binary to /usr/local/bin (falls back to ~/.local/bin).
+#
+# Windows (Git Bash / MSYS / Cygwin) is supported: the .zip archive is used
+# and press.exe is installed.
+#
+# Environment:
+#   VERSION               release tag to install (default: latest)
+#   INSTALL_DIR           install directory (default: see above)
+#   PRESS_RELEASE_BASE    release download base URL (for testing/mirrors)
 
 set -euo pipefail
 
 REPO="ChristianKreuzberger/press"
 BINARY="press"
 GITHUB_API="https://api.github.com/repos/${REPO}/releases/latest"
+RELEASE_BASE="${PRESS_RELEASE_BASE:-https://github.com/${REPO}/releases/download}"
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -87,6 +98,25 @@ download() {
   fi
 }
 
+# ── verify ────────────────────────────────────────────────────────────────────
+
+# Verify $2 (archive file name) in directory $1 against $1/checksums.txt.
+verify_checksum() {
+  local dir="$1" name="$2" check
+  if command -v sha256sum >/dev/null 2>&1; then
+    check="sha256sum -c"
+  elif command -v shasum >/dev/null 2>&1; then
+    check="shasum -a 256 -c"
+  else
+    die "cannot verify download: neither sha256sum nor shasum is available"
+  fi
+  # Only check our archive's line; checksums.txt lists every archive.
+  awk -v n="${name}" '$2 == n || $2 == "*" n' "${dir}/checksums.txt" > "${dir}/checksum.line"
+  [ -s "${dir}/checksum.line" ] || die "no checksum for ${name} in checksums.txt"
+  (cd "${dir}" && ${check} checksum.line >/dev/null 2>&1) \
+    || die "checksum verification failed for ${name}; refusing to install"
+}
+
 # ── install ───────────────────────────────────────────────────────────────────
 
 main() {
@@ -96,7 +126,8 @@ main() {
 
   os="$(detect_os)"
   arch="$(detect_arch)"
-  version="$(fetch_latest_version)"
+  version="${VERSION:-}"
+  [ -n "${version}" ] || version="$(fetch_latest_version)"
   # Strip leading 'v' if present for the archive name
   local ver_num="${version#v}"
 
@@ -112,13 +143,17 @@ main() {
   fi
 
   local archive_name="${BINARY}_${ver_num}_${os}_${arch}.${ext}"
-  local download_url="https://github.com/${REPO}/releases/download/${version}/${archive_name}"
+  local download_url="${RELEASE_BASE}/${version}/${archive_name}"
 
   tmp_dir="$(mktemp -d)"
   trap 'rm -rf "${tmp_dir}"' EXIT
 
   info "Downloading ${download_url}"
   download "${download_url}" "${tmp_dir}/${archive_name}"
+
+  info "Verifying checksum"
+  download "${RELEASE_BASE}/${version}/checksums.txt" "${tmp_dir}/checksums.txt"
+  verify_checksum "${tmp_dir}" "${archive_name}"
 
   info "Extracting archive"
   if [ "${ext}" = "zip" ]; then
@@ -136,7 +171,10 @@ main() {
   [ -f "${bin_src}" ] || die "binary not found in archive (expected: ${bin_src})"
 
   # Choose install directory
-  if [ -w "/usr/local/bin" ]; then
+  if [ -n "${INSTALL_DIR:-}" ]; then
+    install_dir="${INSTALL_DIR}"
+    mkdir -p "${install_dir}"
+  elif [ -w "/usr/local/bin" ]; then
     install_dir="/usr/local/bin"
   elif [ "$(id -u)" -eq 0 ]; then
     install_dir="/usr/local/bin"

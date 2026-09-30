@@ -20,7 +20,15 @@
 curl -fsSL https://raw.githubusercontent.com/ChristianKreuzberger/press/main/install.sh | bash
 ```
 
-The script automatically detects your OS and CPU architecture, downloads the correct binary from the [latest GitHub Release](https://github.com/ChristianKreuzberger/press/releases/latest), and installs it to `/usr/local/bin` (or `~/.local/bin` when you don't have root access).
+The script automatically detects your OS and CPU architecture, downloads the correct binary from the [latest GitHub Release](https://github.com/ChristianKreuzberger/press/releases/latest), and installs it to `/usr/local/bin` (or `~/.local/bin` when you don't have root access). Before installing, it verifies the archive's SHA-256 checksum against the release's `checksums.txt` and aborts on a mismatch.
+
+To pin a release, use the install script from that tag and set `VERSION` (this also skips the GitHub API lookup):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ChristianKreuzberger/press/v0.1.0/install.sh | VERSION=v0.1.0 bash
+```
+
+On Windows, the script also works from Git Bash (it installs `press.exe`).
 
 ### Manual download
 

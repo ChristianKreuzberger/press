@@ -47,6 +47,9 @@ jobs:
       - name: Test
         run: go test -coverprofile=coverage.out -covermode=atomic ./...
 
+      - name: Test install.sh
+        run: bash test/install_test.sh
+
       - name: Build
         run: go build ./...
 
