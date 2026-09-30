@@ -9,6 +9,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
+
+	"github.com/ChristianKreuzberger/press/internal/frontmatter"
 )
 
 const pagesDir = "pages"
@@ -31,8 +34,9 @@ type Section struct {
 
 // Page represents a page within a section.
 type Page struct {
-	Name string // file name without the .md extension
-	Path string // absolute path to the .md file
+	Name  string // file name without the .md extension
+	Path  string // absolute path to the .md file
+	Draft bool   // true when the page has draft: true in its frontmatter
 }
 
 // validateName rejects names that are empty, equal to "." or "..", or that
@@ -138,6 +142,50 @@ func Update(siteDir, name string, content []byte) error {
 	return os.WriteFile(indexPath, content, 0644)
 }
 
+// Rename renames the section from oldName to newName.
+// It updates the title and updated_at in the section's index.md.
+func Rename(siteDir, oldName, newName string, now time.Time) error {
+	if err := validateName(oldName); err != nil {
+		return err
+	}
+	if err := validateName(newName); err != nil {
+		return err
+	}
+
+	oldDir := sectionDir(siteDir, oldName)
+	newDir := sectionDir(siteDir, newName)
+
+	if _, err := os.Stat(oldDir); os.IsNotExist(err) {
+		return fmt.Errorf("%w: %q", ErrSectionNotFound, oldName)
+	}
+	if _, err := os.Stat(newDir); err == nil {
+		return fmt.Errorf("%w: %q", ErrSectionExists, newName)
+	}
+
+	indexPath := filepath.Join(oldDir, "index.md")
+	content, err := os.ReadFile(indexPath)
+	if err != nil {
+		return err
+	}
+	content, err = frontmatter.SetField(content, "title", frontmatter.Humanize(newName))
+	if err != nil {
+		return fmt.Errorf("rename section: %w", err)
+	}
+	content, err = frontmatter.SetField(content, "updated_at", now.UTC().Format(time.RFC3339))
+	if err != nil {
+		return fmt.Errorf("rename section: %w", err)
+	}
+	if err := os.Rename(oldDir, newDir); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(newDir, "index.md"), content, 0644); err != nil {
+		// Roll back the directory rename to avoid a half-applied state.
+		_ = os.Rename(newDir, oldDir)
+		return err
+	}
+	return nil
+}
+
 // ListPages returns all pages found inside a section directory, including index.md.
 // Pages are returned in directory order.
 func ListPages(siteDir, sectionName string) ([]Page, error) {
@@ -157,12 +205,17 @@ func ListPages(siteDir, sectionName string) ([]Page, error) {
 	for _, e := range entries {
 		if !e.IsDir() && strings.HasSuffix(e.Name(), ".md") {
 			name := strings.TrimSuffix(e.Name(), ".md")
+			path := filepath.Join(dir, e.Name())
+			draft, err := frontmatter.ParseDraftFromFile(path)
+			if err != nil {
+				return nil, err
+			}
 			pages = append(pages, Page{
-				Name: name,
-				Path: filepath.Join(dir, e.Name()),
+				Name:  name,
+				Path:  path,
+				Draft: draft,
 			})
 		}
 	}
 	return pages, nil
 }
-

@@ -32,11 +32,12 @@ func runTree(_ []string) {
 	type item struct {
 		name      string
 		isSection bool
+		draft     bool
 	}
 
 	items := make([]item, 0, len(pages)+len(sections))
 	for _, p := range pages {
-		items = append(items, item{name: p.Name})
+		items = append(items, item{name: p.Name, draft: p.Draft})
 	}
 	for _, s := range sections {
 		items = append(items, item{name: s.Name, isSection: true})
@@ -71,10 +72,18 @@ func runTree(_ []string) {
 				if j == len(sectionPages)-1 {
 					childConnector = "└── "
 				}
-				fmt.Printf("%s%s%s\n", childIndent, childConnector, sp.Name)
+				if sp.Draft {
+					fmt.Printf("%s%s%s [draft]\n", childIndent, childConnector, sp.Name)
+				} else {
+					fmt.Printf("%s%s%s\n", childIndent, childConnector, sp.Name)
+				}
 			}
 		} else {
-			fmt.Printf("%s%s\n", connector, it.name)
+			if it.draft {
+				fmt.Printf("%s%s [draft]\n", connector, it.name)
+			} else {
+				fmt.Printf("%s%s\n", connector, it.name)
+			}
 		}
 	}
 }

@@ -23,7 +23,9 @@ func main() {
 		fmt.Fprintf(os.Stderr, "  list <page|section>     list pages or sections\n")
 		fmt.Fprintf(os.Stderr, "  update <page|section>   update a page or section\n")
 		fmt.Fprintf(os.Stderr, "  delete <page|section>   delete a page or section\n")
+		fmt.Fprintf(os.Stderr, "  rename <page|section>   rename a page or section\n")
 		fmt.Fprintf(os.Stderr, "  tree                    show a tree of all pages and sections\n")
+		fmt.Fprintf(os.Stderr, "  check                   validate pages and internal links\n")
 	}
 	flag.Parse()
 
@@ -53,8 +55,12 @@ func main() {
 		runUpdate(args[1:])
 	case "delete":
 		runDelete(args[1:])
+	case "rename":
+		runRename(args[1:])
 	case "tree":
 		runTree(args[1:])
+	case "check":
+		runCheck(args[1:])
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n", args[0])
 		flag.Usage()
@@ -121,6 +127,18 @@ func runDelete(args []string) {
 		runPageDelete(args[1:])
 	case "section":
 		runSectionDelete(args[1:])
+	default:
+		fmt.Fprintf(os.Stderr, "unknown noun: %s (expected: page, section)\n", args[0])
+		os.Exit(1)
+	}
+}
+
+func runRename(args []string) {
+	switch nounArg("rename", args) {
+	case "page":
+		runPageRename(args[1:])
+	case "section":
+		runSectionRename(args[1:])
 	default:
 		fmt.Fprintf(os.Stderr, "unknown noun: %s (expected: page, section)\n", args[0])
 		os.Exit(1)

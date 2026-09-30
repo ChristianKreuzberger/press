@@ -4,7 +4,9 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestListEmpty(t *testing.T) {
@@ -272,3 +274,101 @@ func TestUpdateMissingIndexMD(t *testing.T) {
 	}
 }
 
+func TestListPagesDraftField(t *testing.T) {
+	dir := t.TempDir()
+	if err := Create(dir, "blog", []byte("# Blog\n")); err != nil {
+		t.Fatal(err)
+	}
+	blogDir := filepath.Join(dir, "pages", "blog")
+	if err := os.WriteFile(filepath.Join(blogDir, "post.md"), []byte("# Post\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(blogDir, "wip.md"), []byte("---\ndraft: true\n---\n# WIP\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	pages, err := ListPages(dir, "blog")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pages) != 3 {
+		t.Fatalf("expected 3 pages, got %d", len(pages))
+	}
+	byName := map[string]Page{}
+	for _, p := range pages {
+		byName[p.Name] = p
+	}
+	post, ok := byName["post"]
+	if !ok {
+		t.Fatal("expected post page to be returned")
+	}
+	if post.Draft {
+		t.Error("expected post to have Draft=false")
+	}
+	wip, ok := byName["wip"]
+	if !ok {
+		t.Fatal("expected wip page to be returned")
+	}
+	if !wip.Draft {
+		t.Error("expected wip to have Draft=true")
+	}
+	index, ok := byName["index"]
+	if !ok {
+		t.Fatal("expected index page to be returned")
+	}
+	if index.Draft {
+		t.Error("expected index to have Draft=false")
+	}
+}
+
+func TestRename(t *testing.T) {
+	dir := t.TempDir()
+	content := []byte("---\ntitle: \"Blog\"\nalias: \"\"\ntags: []\nweight: 0\ncreated_at: \"2026-01-01T00:00:00Z\"\nupdated_at: \"2026-01-01T00:00:00Z\"\ntoc_sort: \"weight\"\ntoc_order: \"asc\"\n---\n# Blog\n")
+	if err := Create(dir, "blog", content); err != nil {
+		t.Fatal(err)
+	}
+	newNow := time.Date(2027, 6, 15, 12, 0, 0, 0, time.UTC)
+	if err := Rename(dir, "blog", "articles", newNow); err != nil {
+		t.Fatalf("Rename() error: %v", err)
+	}
+	// Old directory should be gone.
+	if _, err := os.Stat(filepath.Join(dir, "pages", "blog")); err == nil {
+		t.Error("expected old directory to be removed")
+	}
+	// New directory should exist with updated index.md.
+	newIndexPath := filepath.Join(dir, "pages", "articles", "index.md")
+	newContent, err := os.ReadFile(newIndexPath)
+	if err != nil {
+		t.Fatalf("expected new index.md to exist: %v", err)
+	}
+	s := string(newContent)
+	if !strings.Contains(s, `title: "Articles"`) {
+		t.Errorf("expected updated title in frontmatter, got: %s", s)
+	}
+	if !strings.Contains(s, newNow.UTC().Format(time.RFC3339)) {
+		t.Errorf("expected updated_at = %s in frontmatter, got: %s", newNow.UTC().Format(time.RFC3339), s)
+	}
+}
+
+func TestRenameNotFound(t *testing.T) {
+	dir := t.TempDir()
+	err := Rename(dir, "missing", "new-name", time.Now())
+	if !errors.Is(err, ErrSectionNotFound) {
+		t.Errorf("expected ErrSectionNotFound, got %v", err)
+	}
+}
+
+func TestRenameTargetExists(t *testing.T) {
+	dir := t.TempDir()
+	content := []byte("---\ntitle: \"Blog\"\nalias: \"\"\ntags: []\nweight: 0\ncreated_at: \"2026-01-01T00:00:00Z\"\nupdated_at: \"2026-01-01T00:00:00Z\"\ntoc_sort: \"weight\"\ntoc_order: \"asc\"\n---\n# Blog\n")
+	if err := Create(dir, "blog", content); err != nil {
+		t.Fatal(err)
+	}
+	if err := Create(dir, "articles", content); err != nil {
+		t.Fatal(err)
+	}
+	err := Rename(dir, "blog", "articles", time.Now())
+	if !errors.Is(err, ErrSectionExists) {
+		t.Errorf("expected ErrSectionExists, got %v", err)
+	}
+}

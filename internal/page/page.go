@@ -7,6 +7,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
+
+	"github.com/ChristianKreuzberger/press/internal/frontmatter"
 )
 
 const pagesDir = "pages"
@@ -22,8 +25,9 @@ var ErrPageNotFound = errors.New("page not found")
 
 // Page represents a single content page backed by a Markdown file.
 type Page struct {
-	Name string // file name without the .md extension
-	Path string // absolute path to the .md file
+	Name  string // file name without the .md extension
+	Path  string // absolute path to the .md file
+	Draft bool   // true when the page has draft: true in its frontmatter
 }
 
 // PagesDir returns the path to the pages directory within siteDir.
@@ -46,9 +50,15 @@ func List(siteDir string) ([]Page, error) {
 	for _, e := range entries {
 		if !e.IsDir() && strings.HasSuffix(e.Name(), ".md") {
 			name := strings.TrimSuffix(e.Name(), ".md")
+			path := filepath.Join(dir, e.Name())
+			draft, err := frontmatter.ParseDraftFromFile(path)
+			if err != nil {
+				return nil, err
+			}
 			pages = append(pages, Page{
-				Name: name,
-				Path: filepath.Join(dir, e.Name()),
+				Name:  name,
+				Path:  path,
+				Draft: draft,
 			})
 		}
 	}
@@ -108,4 +118,48 @@ func Update(siteDir, name string, content []byte) error {
 		return fmt.Errorf("%w: %q", ErrPageNotFound, name)
 	}
 	return os.WriteFile(path, content, 0644)
+}
+
+// Rename renames the page from oldName to newName.
+// It updates the title in the frontmatter to the humanised form of newName,
+// and sets updated_at to now.
+func Rename(siteDir, oldName, newName string, now time.Time) error {
+	dir := PagesDir(siteDir)
+	cleanDir := filepath.Clean(dir) + string(filepath.Separator)
+
+	oldPath := filepath.Join(dir, filepath.FromSlash(oldName)+".md")
+	if !strings.HasPrefix(filepath.Clean(oldPath), cleanDir) {
+		return fmt.Errorf("%w: %q", ErrInvalidName, oldName)
+	}
+	newPath := filepath.Join(dir, filepath.FromSlash(newName)+".md")
+	if !strings.HasPrefix(filepath.Clean(newPath), cleanDir) {
+		return fmt.Errorf("%w: %q", ErrInvalidName, newName)
+	}
+
+	if _, err := os.Stat(oldPath); os.IsNotExist(err) {
+		return fmt.Errorf("%w: %q", ErrPageNotFound, oldName)
+	}
+	if _, err := os.Stat(newPath); err == nil {
+		return fmt.Errorf("%w: %q", ErrPageExists, newName)
+	}
+
+	content, err := os.ReadFile(oldPath)
+	if err != nil {
+		return err
+	}
+	content, err = frontmatter.SetField(content, "title", frontmatter.Humanize(newName))
+	if err != nil {
+		return fmt.Errorf("rename page: %w", err)
+	}
+	content, err = frontmatter.SetField(content, "updated_at", now.UTC().Format(time.RFC3339))
+	if err != nil {
+		return fmt.Errorf("rename page: %w", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(newPath), 0755); err != nil {
+		return err
+	}
+	if err := os.WriteFile(newPath, content, 0644); err != nil {
+		return err
+	}
+	return os.Remove(oldPath)
 }

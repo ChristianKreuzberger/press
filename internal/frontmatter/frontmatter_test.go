@@ -1,6 +1,8 @@
 package frontmatter
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -315,4 +317,185 @@ func TestParseStringField_UnclosedFrontmatter(t *testing.T) {
 	if got != "" {
 		t.Errorf("expected empty string for unclosed frontmatter, got %q", got)
 	}
+}
+
+func TestParseDraft(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		want    bool
+	}{
+		{
+			name:    "draft true unquoted",
+			content: "---\ndraft: true\n---\n",
+			want:    true,
+		},
+		{
+			name:    "draft true quoted",
+			content: "---\ndraft: \"true\"\n---\n",
+			want:    true,
+		},
+		{
+			name:    "draft false unquoted",
+			content: "---\ndraft: false\n---\n",
+			want:    false,
+		},
+		{
+			name:    "draft absent",
+			content: "---\ntitle: \"Hello\"\n---\n",
+			want:    false,
+		},
+		{
+			name:    "no frontmatter",
+			content: "# Hello\n",
+			want:    false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ParseDraft([]byte(tt.content))
+			if got != tt.want {
+				t.Errorf("ParseDraft() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestParseDraftFromFile(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		want    bool
+	}{
+		{
+			name:    "draft true unquoted",
+			content: "---\ndraft: true\n---\n# Page\n\nLong body that should not be read.\n",
+			want:    true,
+		},
+		{
+			name:    "draft true quoted",
+			content: "---\ndraft: \"true\"\n---\n",
+			want:    true,
+		},
+		{
+			name:    "draft false",
+			content: "---\ndraft: false\n---\n",
+			want:    false,
+		},
+		{
+			name:    "draft absent",
+			content: "---\ntitle: \"Hello\"\n---\n",
+			want:    false,
+		},
+		{
+			name:    "no frontmatter",
+			content: "# Hello\n",
+			want:    false,
+		},
+		{
+			name:    "unclosed frontmatter",
+			content: "---\ndraft: true\n",
+			want:    false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, "page.md")
+			if err := os.WriteFile(path, []byte(tt.content), 0644); err != nil {
+				t.Fatal(err)
+			}
+			got, err := ParseDraftFromFile(path)
+			if err != nil {
+				t.Fatalf("ParseDraftFromFile() error: %v", err)
+			}
+			if got != tt.want {
+				t.Errorf("ParseDraftFromFile() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestParseDraftFromFile_NotFound(t *testing.T) {
+	_, err := ParseDraftFromFile("/nonexistent/path/page.md")
+	if err == nil {
+		t.Error("expected error for non-existent file, got nil")
+	}
+}
+
+func TestHumanize(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"about-us", "About Us"},
+		{"my_cool_page", "My Cool Page"},
+		{"blog", "Blog"},
+		{"my-blog-post", "My Blog Post"},
+		{"section_one_two", "Section One Two"},
+		{"UPPER", "Upper"},
+		{"mixed-Case_word", "Mixed Case Word"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			got := Humanize(tt.input)
+			if got != tt.want {
+				t.Errorf("Humanize(%q) = %q; want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestSetField(t *testing.T) {
+	t.Run("preserves exact formatting without extra blank lines", func(t *testing.T) {
+		content := "---\ntitle: \"Old Title\"\nupdated_at: \"2026-01-01T00:00:00Z\"\n---\n# Body\n"
+		got, err := SetField([]byte(content), "title", "New Title")
+		if err != nil {
+			t.Fatalf("SetField() error: %v", err)
+		}
+		want := "---\ntitle: \"New Title\"\nupdated_at: \"2026-01-01T00:00:00Z\"\n---\n# Body\n"
+		if string(got) != want {
+			t.Errorf("SetField() output:\ngot:  %q\nwant: %q", got, want)
+		}
+	})
+	t.Run("updates title", func(t *testing.T) {
+		content := "---\ntitle: \"Old Title\"\nupdated_at: \"2026-01-01T00:00:00Z\"\n---\n# Body\n"
+		got, err := SetField([]byte(content), "title", "New Title")
+		if err != nil {
+			t.Fatalf("SetField() error: %v", err)
+		}
+		if !strings.Contains(string(got), `title: "New Title"`) {
+			t.Errorf("expected updated title, got: %s", got)
+		}
+		if !strings.Contains(string(got), "# Body\n") {
+			t.Errorf("expected body preserved, got: %s", got)
+		}
+	})
+
+	t.Run("updates updated_at", func(t *testing.T) {
+		content := "---\ntitle: \"Page\"\nupdated_at: \"2026-01-01T00:00:00Z\"\n---\n"
+		got, err := SetField([]byte(content), "updated_at", "2027-06-15T12:00:00Z")
+		if err != nil {
+			t.Fatalf("SetField() error: %v", err)
+		}
+		if !strings.Contains(string(got), `updated_at: "2027-06-15T12:00:00Z"`) {
+			t.Errorf("expected updated timestamp, got: %s", got)
+		}
+	})
+
+	t.Run("error when no frontmatter", func(t *testing.T) {
+		content := "# Hello\n"
+		_, err := SetField([]byte(content), "title", "New")
+		if err == nil {
+			t.Error("expected error for content without frontmatter, got nil")
+		}
+	})
+
+	t.Run("error when field absent", func(t *testing.T) {
+		content := "---\ntitle: \"Page\"\n---\n"
+		_, err := SetField([]byte(content), "updated_at", "2027-01-01T00:00:00Z")
+		if err == nil {
+			t.Error("expected error when field is absent, got nil")
+		}
+	})
 }
