@@ -86,10 +86,6 @@ func Build(siteDir, outputDir string, includeDrafts bool, staticDir string) ([]s
 		return nil, fmt.Errorf("parsing template: %w", err)
 	}
 
-	// rootNavRefs contains navigation entries with paths relative to the output root
-	// (e.g. "about.html", "blog/index.html"). These are used as-is for top-level pages,
-	// and prefixed with "../" for pages that live one level deep inside a section
-	// directory.
 	rootNavRefs, err := buildRootNavRefs(pages, sections, includeDrafts)
 	if err != nil {
 		return nil, fmt.Errorf("building nav refs: %w", err)
@@ -101,7 +97,29 @@ func Build(siteDir, outputDir string, includeDrafts bool, staticDir string) ([]s
 
 	var built []string
 
-	// Build top-level pages.
+	topLevelPaths, err := buildTopLevelPages(pages, outputDir, rootNavRefs, tmpl, includeDrafts)
+	if err != nil {
+		return nil, err
+	}
+	built = append(built, topLevelPaths...)
+
+	if err := copyAssets(siteDir, outputDir, staticDir); err != nil {
+		return nil, err
+	}
+
+	sectionPaths, err := buildSections(sections, siteDir, outputDir, rootNavRefs, tmpl, includeDrafts)
+	if err != nil {
+		return nil, err
+	}
+	built = append(built, sectionPaths...)
+
+	return built, nil
+}
+
+// buildTopLevelPages builds all non-draft top-level pages.
+// It returns the list of absolute paths of HTML files that were written.
+func buildTopLevelPages(pages []page.Page, outputDir string, rootNavRefs []PageRef, tmpl *template.Template, includeDrafts bool) ([]string, error) {
+	var built []string
 	for _, p := range pages {
 		if !includeDrafts && p.Draft {
 			continue
@@ -112,54 +130,75 @@ func Build(siteDir, outputDir string, includeDrafts bool, staticDir string) ([]s
 		}
 		built = append(built, outPath)
 	}
+	return built, nil
+}
 
-	// Copy non-Markdown files from pages/ to outputDir.
+// copyAssets copies both static assets from pages/ and the static directory.
+// Static assets are non-Markdown files under pages/.
+// The static directory is copied verbatim if it exists.
+func copyAssets(siteDir, outputDir, staticDir string) error {
 	if err := copyStaticAssets(siteDir, outputDir); err != nil {
-		return nil, err
+		return err
 	}
-
-	// Copy the static directory verbatim into the output directory.
 	if err := copyStaticDir(siteDir, outputDir, staticDir); err != nil {
-		return nil, err
+		return err
+	}
+	return nil
+}
+
+// buildSections builds all section pages.
+// It returns the list of absolute paths of HTML files that were written.
+func buildSections(sections []section.Section, siteDir, outputDir string, rootNavRefs []PageRef, tmpl *template.Template, includeDrafts bool) ([]string, error) {
+	var built []string
+	sectionNavRefs := prefixNavRefs(rootNavRefs, "../")
+
+	for _, s := range sections {
+		sectionPaths, err := buildSection(s, siteDir, outputDir, sectionNavRefs, tmpl, includeDrafts)
+		if err != nil {
+			return nil, err
+		}
+		built = append(built, sectionPaths...)
+	}
+	return built, nil
+}
+
+// buildSection builds a single section.
+// It returns the list of absolute paths of HTML files that were written.
+func buildSection(s section.Section, siteDir, outputDir string, sectionNavRefs []PageRef, tmpl *template.Template, includeDrafts bool) ([]string, error) {
+	indexContent, err := os.ReadFile(s.IndexPath)
+	if err != nil {
+		return nil, fmt.Errorf("reading section index %s: %w", s.IndexPath, err)
+	}
+	if !includeDrafts && frontmatter.ParseDraft(indexContent) {
+		return nil, nil
 	}
 
-	// Build section pages.
-	for _, s := range sections {
-		// Read the section index up front so we can check its draft status.
-		indexContent, err := os.ReadFile(s.IndexPath)
-		if err != nil {
-			return nil, fmt.Errorf("reading section index %s: %w", s.IndexPath, err)
-		}
-		// Skip the entire section when its index.md is a draft and drafts are excluded.
-		if !includeDrafts && frontmatter.ParseDraft(indexContent) {
+	sectionPages, err := section.ListPages(siteDir, s.Name)
+	if err != nil {
+		return nil, fmt.Errorf("listing pages in section %s: %w", s.Name, err)
+	}
+
+	sectionOutDir := filepath.Join(outputDir, s.Name)
+	if err := os.MkdirAll(sectionOutDir, 0755); err != nil {
+		return nil, fmt.Errorf("creating section output directory %s: %w", sectionOutDir, err)
+	}
+
+	toc := buildSectionTOC(sectionPages, indexContent, includeDrafts)
+
+	var built []string
+	for _, sp := range sectionPages {
+		if !includeDrafts && sp.Draft {
 			continue
 		}
-		sectionPages, err := section.ListPages(siteDir, s.Name)
-		if err != nil {
-			return nil, fmt.Errorf("listing pages in section %s: %w", s.Name, err)
+		outPath := filepath.Join(sectionOutDir, sp.Name+".html")
+		var pageTOC []TOCEntry
+		if sp.Name == "index" {
+			pageTOC = toc
 		}
-		sectionOutDir := filepath.Join(outputDir, s.Name)
-		if err := os.MkdirAll(sectionOutDir, 0755); err != nil {
-			return nil, fmt.Errorf("creating section output directory %s: %w", sectionOutDir, err)
+		if err := buildPageFromPath(sp.Name, sp.Path, outPath, sectionNavRefs, pageTOC, tmpl); err != nil {
+			return nil, err
 		}
-		// Build the TOC for this section's index page.
-		toc := buildSectionTOC(sectionPages, indexContent, includeDrafts)
-		// Section pages are one level deep, so prefix top-level nav URLs with "../".
-		sectionNavRefs := prefixNavRefs(rootNavRefs, "../")
-		for _, sp := range sectionPages {
-			if !includeDrafts && sp.Draft {
-				continue
-			}
-			outPath := filepath.Join(sectionOutDir, sp.Name+".html")
-			var pageTOC []TOCEntry
-			if sp.Name == "index" {
-				pageTOC = toc
-			}
-			if err := buildPageFromPath(sp.Name, sp.Path, outPath, sectionNavRefs, pageTOC, tmpl); err != nil {
-				return nil, err
-			}
-			built = append(built, outPath)
-		}
+		built = append(built, outPath)
 	}
 	return built, nil
 }
