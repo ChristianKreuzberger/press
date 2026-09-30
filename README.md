@@ -70,7 +70,7 @@ press serve
 | `press list section` | List all sections |
 | `press create section <name> [--file f.md]` | Create a new section (folder + `index.md`) |
 | `press update section <name> --file f.md` | Replace a section's index content |
-| `press delete section <name>` | Delete a section and all its pages |
+| `press delete section <name>` | Delete a section and all its pages (a folder without `index.md` is not a section and is left alone) |
 | `press rename page <old> <new>` | Rename a page; updates title and `updated_at` in frontmatter |
 | `press rename section <old> <new>` | Rename a section; updates title and `updated_at` in its `index.md` |
 | `press build [-output dir] [--static dir]` | Build the site into `dist/` (default); draft pages are skipped |

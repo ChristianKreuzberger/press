@@ -372,3 +372,87 @@ func TestRenameTargetExists(t *testing.T) {
 		t.Errorf("expected ErrSectionExists, got %v", err)
 	}
 }
+
+// assetDir creates pages/assets/i.png with no index.md, i.e. a plain
+// directory that must not be treated as a section.
+func assetDir(t *testing.T) (siteDir, file string) {
+	t.Helper()
+	siteDir = t.TempDir()
+	d := filepath.Join(siteDir, "pages", "assets")
+	if err := os.MkdirAll(d, 0755); err != nil {
+		t.Fatal(err)
+	}
+	file = filepath.Join(d, "i.png")
+	if err := os.WriteFile(file, []byte("png"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	return siteDir, file
+}
+
+func assertIntact(t *testing.T, path string) {
+	t.Helper()
+	if _, err := os.Stat(path); err != nil {
+		t.Errorf("directory contents should be left intact: %v", err)
+	}
+}
+
+func TestDeleteWithoutIndexMD(t *testing.T) {
+	dir, file := assetDir(t)
+	if err := Delete(dir, "assets"); !errors.Is(err, ErrSectionNotFound) {
+		t.Errorf("expected ErrSectionNotFound, got %v", err)
+	}
+	assertIntact(t, file)
+}
+
+func TestUpdateWithoutIndexMD(t *testing.T) {
+	dir, file := assetDir(t)
+	if err := Update(dir, "assets", []byte("x")); !errors.Is(err, ErrSectionNotFound) {
+		t.Errorf("expected ErrSectionNotFound, got %v", err)
+	}
+	assertIntact(t, file)
+	if _, err := os.Stat(filepath.Join(dir, "pages", "assets", "index.md")); err == nil {
+		t.Error("index.md must not be created")
+	}
+}
+
+func TestRenameWithoutIndexMD(t *testing.T) {
+	dir, file := assetDir(t)
+	if err := Rename(dir, "assets", "media", time.Now()); !errors.Is(err, ErrSectionNotFound) {
+		t.Errorf("expected ErrSectionNotFound, got %v", err)
+	}
+	assertIntact(t, file)
+}
+
+func TestDeleteIndexIsDirectory(t *testing.T) {
+	dir := t.TempDir()
+	d := filepath.Join(dir, "pages", "odd", "index.md")
+	if err := os.MkdirAll(d, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := Delete(dir, "odd"); !errors.Is(err, ErrSectionNotFound) {
+		t.Errorf("expected ErrSectionNotFound, got %v", err)
+	}
+	assertIntact(t, d)
+}
+
+func TestIndexIsDirectoryIsNotASection(t *testing.T) {
+	dir := t.TempDir()
+	d := filepath.Join(dir, "pages", "odd", "index.md")
+	if err := os.MkdirAll(d, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := Update(dir, "odd", []byte("x")); !errors.Is(err, ErrSectionNotFound) {
+		t.Errorf("Update: expected ErrSectionNotFound, got %v", err)
+	}
+	if err := Rename(dir, "odd", "even", time.Now()); !errors.Is(err, ErrSectionNotFound) {
+		t.Errorf("Rename: expected ErrSectionNotFound, got %v", err)
+	}
+	assertIntact(t, d)
+	sections, err := List(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sections) != 0 {
+		t.Errorf("List should skip a directory whose index.md is a directory, got %v", sections)
+	}
+}
