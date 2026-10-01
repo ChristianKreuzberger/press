@@ -111,3 +111,36 @@ func TestBuildFailsOnAssetSectionPageCollision(t *testing.T) {
 		t.Fatal("expected collision error in section")
 	}
 }
+
+func TestBuildFailsOnUppercaseHTMLAssetCollision(t *testing.T) {
+	siteDir, outDir := newAssetSite(t)
+	if err := page.Create(siteDir, "about", []byte("# About\n")); err != nil {
+		t.Fatal(err)
+	}
+	// On case-insensitive filesystems about.HTML is the same file as the built about.html.
+	if err := os.WriteFile(filepath.Join(siteDir, "pages", "about.HTML"), []byte("<p>x</p>"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := Build(siteDir, outDir, false, "static"); err == nil {
+		t.Fatal("expected collision error for about.HTML")
+	}
+}
+
+func TestBuildSkipsHiddenDirectories(t *testing.T) {
+	siteDir, outDir := newAssetSite(t)
+	cache := filepath.Join(siteDir, "pages", ".cache")
+	if err := os.MkdirAll(cache, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cache, "data.txt"), []byte("x"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := Build(siteDir, outDir, false, "static"); err != nil {
+		t.Fatalf("Build failed: %v", err)
+	}
+	if _, err := os.Lstat(filepath.Join(outDir, ".cache")); err == nil {
+		t.Error("hidden directory .cache must not be copied")
+	}
+}

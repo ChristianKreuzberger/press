@@ -439,10 +439,11 @@ func copyStaticAssets(siteDir, outputDir string) error {
 // path as a built page, i.e. about.html next to about.md at the top level or
 // directly inside a section. Deeper directories are not built, so they can't collide.
 func checkPageCollision(src, rel string) error {
-	if !strings.HasSuffix(src, ".html") || strings.Contains(filepath.Dir(rel), string(filepath.Separator)) {
+	ext := filepath.Ext(src)
+	if !strings.EqualFold(ext, ".html") || strings.Contains(filepath.Dir(rel), string(filepath.Separator)) {
 		return nil
 	}
-	mdPath := strings.TrimSuffix(src, ".html") + ".md"
+	mdPath := strings.TrimSuffix(src, ext) + ".md"
 	if _, err := os.Lstat(mdPath); err == nil {
 		return fmt.Errorf("asset %s would overwrite the page built from %s", rel, filepath.Base(mdPath))
 	}
