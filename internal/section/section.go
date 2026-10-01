@@ -115,8 +115,8 @@ func Create(siteDir, name string, content []byte) error {
 		return err
 	}
 	if err := writeIndex(filepath.Join(dir, "index.md"), content); err != nil {
-		// Don't leave an empty directory behind.
-		_ = os.RemoveAll(dir)
+		// Non-recursive so content added concurrently is never deleted.
+		_ = os.Remove(dir)
 		return err
 	}
 	return nil
@@ -130,9 +130,14 @@ func writeIndex(path string, content []byte) error {
 	}
 	if _, err := f.Write(content); err != nil {
 		_ = f.Close()
+		_ = os.Remove(path)
 		return err
 	}
-	return f.Close()
+	if err := f.Close(); err != nil {
+		_ = os.Remove(path)
+		return err
+	}
+	return nil
 }
 
 // requireSection returns ErrSectionNotFound unless dir contains index.md as a
