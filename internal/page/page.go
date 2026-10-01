@@ -77,13 +77,66 @@ func Create(siteDir, name string, content []byte) error {
 	if !strings.HasPrefix(filepath.Clean(path), cleanDir) {
 		return fmt.Errorf("%w: %q", ErrInvalidName, name)
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0750); err != nil {
-		return err
-	}
-	if _, err := os.Stat(path); err == nil {
+	if _, err := os.Lstat(path); err == nil {
 		return fmt.Errorf("%w: %q", ErrPageExists, name)
 	}
-	return os.WriteFile(path, content, 0644)
+	err := writeNew(dir, path, content, 0644)
+	if errors.Is(err, os.ErrExist) {
+		return fmt.Errorf("%w: %q", ErrPageExists, name)
+	}
+	return err
+}
+
+// writeNew creates path with O_EXCL so it never overwrites an existing file,
+// creating missing parent directories first. On failure it removes the file
+// and any directories it created, so no partial state is left behind.
+func writeNew(baseDir, path string, content []byte, perm os.FileMode) (err error) {
+	// Remember the topmost directory we create so we can undo exactly that.
+	var firstCreated string
+	for d := filepath.Dir(path); d != filepath.Clean(baseDir); d = filepath.Dir(d) {
+		if _, serr := os.Stat(d); serr == nil {
+			break
+		}
+		firstCreated = d
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0750); err != nil {
+		if firstCreated != "" {
+			_ = os.RemoveAll(firstCreated)
+		}
+		return err
+	}
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, perm) //nolint:gosec // callers validate that path stays inside the pages dir
+	if err != nil {
+		if firstCreated != "" {
+			_ = os.RemoveAll(firstCreated)
+		}
+		return err
+	}
+	if _, err = f.Write(content); err == nil {
+		err = f.Close()
+	} else {
+		_ = f.Close()
+	}
+	if err != nil {
+		_ = os.Remove(path)
+		if firstCreated != "" {
+			_ = os.RemoveAll(firstCreated)
+		}
+		return err
+	}
+	// OpenFile's perm is subject to umask; set it explicitly so renames keep the original mode.
+	return os.Chmod(path, perm)
+}
+
+// removeEmptyParents removes empty directories from path's parent up to, but
+// not including, baseDir. It stops at the first non-empty directory.
+func removeEmptyParents(baseDir, path string) {
+	stop := filepath.Clean(baseDir)
+	for d := filepath.Dir(path); d != stop && strings.HasPrefix(d, stop); d = filepath.Dir(d) {
+		if err := os.Remove(d); err != nil {
+			return
+		}
+	}
 }
 
 // Delete removes the page with the given name.
@@ -102,6 +155,7 @@ func Delete(siteDir, name string) error {
 		}
 		return err
 	}
+	removeEmptyParents(dir, path)
 	return nil
 }
 
@@ -136,10 +190,14 @@ func Rename(siteDir, oldName, newName string, now time.Time) error {
 		return fmt.Errorf("%w: %q", ErrInvalidName, newName)
 	}
 
-	if _, err := os.Stat(oldPath); os.IsNotExist(err) {
-		return fmt.Errorf("%w: %q", ErrPageNotFound, oldName)
+	info, err := os.Stat(oldPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("%w: %q", ErrPageNotFound, oldName)
+		}
+		return err
 	}
-	if _, err := os.Stat(newPath); err == nil {
+	if _, err := os.Lstat(newPath); err == nil {
 		return fmt.Errorf("%w: %q", ErrPageExists, newName)
 	}
 
@@ -155,11 +213,19 @@ func Rename(siteDir, oldName, newName string, now time.Time) error {
 	if err != nil {
 		return fmt.Errorf("rename page: %w", err)
 	}
-	if err := os.MkdirAll(filepath.Dir(newPath), 0750); err != nil {
+	// O_EXCL guards against a file appearing at newPath since the check above.
+	if err := writeNew(dir, newPath, content, info.Mode().Perm()); err != nil {
+		if errors.Is(err, os.ErrExist) {
+			return fmt.Errorf("%w: %q", ErrPageExists, newName)
+		}
 		return err
 	}
-	if err := os.WriteFile(newPath, content, 0644); err != nil { //nolint:gosec // newPath is validated to stay inside the pages dir above
+	if err := os.Remove(oldPath); err != nil {
+		// Don't leave both files behind.
+		_ = os.Remove(newPath)
+		removeEmptyParents(dir, newPath)
 		return err
 	}
-	return os.Remove(oldPath)
+	removeEmptyParents(dir, oldPath)
+	return nil
 }
