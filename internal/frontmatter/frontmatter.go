@@ -96,9 +96,10 @@ func cleanValue(val string) string {
 		// Generate and SetField write strconv-quoted values, so the closing
 		// quote must be found escape-aware and the content unescaped.
 		for i := 1; i < len(val); i++ {
-			if val[i] == '\\' {
+			switch val[i] {
+			case '\\':
 				i++
-			} else if val[i] == '"' {
+			case '"':
 				if s, err := strconv.Unquote(val[:i+1]); err == nil {
 					return s
 				}
@@ -110,12 +111,13 @@ func cleanValue(val string) string {
 		// In single-quoted YAML a doubled quote is a literal quote.
 		var b strings.Builder
 		for i := 1; i < len(val); i++ {
-			if val[i] != '\'' {
+			switch {
+			case val[i] != '\'':
 				b.WriteByte(val[i])
-			} else if i+1 < len(val) && val[i+1] == '\'' {
+			case i+1 < len(val) && val[i+1] == '\'':
 				b.WriteByte('\'')
 				i++
-			} else {
+			default:
 				return b.String()
 			}
 		}
