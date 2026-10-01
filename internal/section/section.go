@@ -25,6 +25,9 @@ var ErrSectionNotFound = errors.New("section not found")
 // ErrInvalidName is returned when a section name contains illegal characters.
 var ErrInvalidName = errors.New("invalid section name")
 
+// ErrNameConflict is returned when a page file already uses the section name.
+var ErrNameConflict = errors.New("name conflicts with an existing page")
+
 // Section represents a group of pages backed by a subdirectory under pages/.
 type Section struct {
 	Name      string // directory name (no slashes)
@@ -48,6 +51,15 @@ func validateName(name string) error {
 	}
 	if strings.ContainsAny(name, "/\\") {
 		return fmt.Errorf("%w: %q (must not contain path separators)", ErrInvalidName, name)
+	}
+	return nil
+}
+
+// checkNoPage rejects a section name that is already taken by a page, which
+// would make pages/<name>.md and pages/<name>/ ambiguous.
+func checkNoPage(siteDir, name string) error {
+	if _, err := os.Lstat(sectionDir(siteDir, name) + ".md"); err == nil {
+		return fmt.Errorf("%w: %q (page %q exists)", ErrNameConflict, name, name)
 	}
 	return nil
 }
@@ -101,6 +113,9 @@ func List(siteDir string) ([]Section, error) {
 // It returns an error if a section with that name already exists.
 func Create(siteDir, name string, content []byte) error {
 	if err := validateName(name); err != nil {
+		return err
+	}
+	if err := checkNoPage(siteDir, name); err != nil {
 		return err
 	}
 	dir := sectionDir(siteDir, name)
@@ -199,6 +214,9 @@ func Rename(siteDir, oldName, newName string, now time.Time) error {
 	}
 	if _, err := os.Stat(newDir); err == nil {
 		return fmt.Errorf("%w: %q", ErrSectionExists, newName)
+	}
+	if err := checkNoPage(siteDir, newName); err != nil {
+		return err
 	}
 
 	indexPath := filepath.Join(oldDir, "index.md")

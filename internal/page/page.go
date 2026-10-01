@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -17,8 +18,12 @@ const pagesDir = "pages"
 // ErrPageExists is returned when a page with the given name already exists.
 var ErrPageExists = errors.New("page already exists")
 
-// ErrInvalidName is returned when the page name would escape the pages directory.
+// ErrInvalidName is returned when the page name is malformed or would escape the pages directory.
 var ErrInvalidName = errors.New("invalid page name")
+
+// ErrNameConflict is returned when the name clashes with a section or with a
+// page that already occupies part of the path.
+var ErrNameConflict = errors.New("name conflicts with an existing page or section")
 
 // ErrPageNotFound is returned when a page with the given name does not exist.
 var ErrPageNotFound = errors.New("page not found")
@@ -65,22 +70,61 @@ func List(siteDir string) ([]Page, error) {
 	return pages, nil
 }
 
+// validateName checks every "/"-separated segment: it must be non-empty, not
+// "." or "..", and free of backslashes (a separator on Windows) and NUL.
+// This also rejects empty names, trailing slashes and absolute paths.
+func validateName(name string) error {
+	for _, seg := range strings.Split(name, "/") {
+		if seg == "" || seg == "." || seg == ".." || strings.ContainsAny(seg, "\\:\x00") {
+			return fmt.Errorf("%w: %q", ErrInvalidName, name)
+		}
+	}
+	return nil
+}
+
+// pagePath validates name and returns the absolute path of its .md file.
+func pagePath(siteDir, name string) (string, error) {
+	if err := validateName(name); err != nil {
+		return "", err
+	}
+	return filepath.Join(PagesDir(siteDir), filepath.FromSlash(name)+".md"), nil
+}
+
+// checkNoConflict reports ErrNameConflict when creating the page name would be
+// ambiguous: a section directory already uses the name, or a parent segment is
+// already a page (e.g. about.md next to about/team.md).
+func checkNoConflict(siteDir, name string) error {
+	dir := PagesDir(siteDir)
+	segs := strings.Split(name, "/")
+	for i := 1; i < len(segs); i++ {
+		parent := filepath.Join(dir, filepath.FromSlash(strings.Join(segs[:i], "/"))+".md")
+		if _, err := os.Lstat(parent); err == nil {
+			return fmt.Errorf("%w: %q (page %q exists)", ErrNameConflict, name, strings.Join(segs[:i], "/"))
+		}
+	}
+	if _, err := os.Lstat(filepath.Join(dir, filepath.FromSlash(name))); err == nil {
+		return fmt.Errorf("%w: %q (a section with that name exists)", ErrNameConflict, name)
+	}
+	return nil
+}
+
 // Create creates a new page with the given name and content.
 // name may contain forward slashes to place the page inside sub-sections
 // (e.g. "blog/my-post" or "blog/2026/my-post").
 // It returns an error if a page with that name already exists.
 func Create(siteDir, name string, content []byte) error {
 	dir := PagesDir(siteDir)
-	path := filepath.Join(dir, filepath.FromSlash(name)+".md")
-	// Prevent path traversal: resolved path must remain inside pages dir.
-	cleanDir := filepath.Clean(dir) + string(filepath.Separator)
-	if !strings.HasPrefix(filepath.Clean(path), cleanDir) {
-		return fmt.Errorf("%w: %q", ErrInvalidName, name)
+	path, err := pagePath(siteDir, name)
+	if err != nil {
+		return err
 	}
 	if _, err := os.Lstat(path); err == nil {
 		return fmt.Errorf("%w: %q", ErrPageExists, name)
 	}
-	err := writeNew(dir, path, content, 0644)
+	if err := checkNoConflict(siteDir, name); err != nil {
+		return err
+	}
+	err = writeNew(dir, path, content, 0644)
 	if errors.Is(err, os.ErrExist) {
 		return fmt.Errorf("%w: %q", ErrPageExists, name)
 	}
@@ -151,11 +195,9 @@ func removeEmptyParents(baseDir, path string) {
 // name may contain forward slashes (e.g. "blog/my-post").
 func Delete(siteDir, name string) error {
 	dir := PagesDir(siteDir)
-	path := filepath.Join(dir, filepath.FromSlash(name)+".md")
-	// Prevent path traversal.
-	cleanDir := filepath.Clean(dir) + string(filepath.Separator)
-	if !strings.HasPrefix(filepath.Clean(path), cleanDir) {
-		return fmt.Errorf("%w: %q", ErrInvalidName, name)
+	path, err := pagePath(siteDir, name)
+	if err != nil {
+		return err
 	}
 	if err := os.Remove(path); err != nil {
 		if os.IsNotExist(err) {
@@ -169,12 +211,9 @@ func Delete(siteDir, name string) error {
 
 // Update replaces the content of an existing page.
 func Update(siteDir, name string, content []byte) error {
-	dir := PagesDir(siteDir)
-	path := filepath.Join(dir, filepath.FromSlash(name)+".md")
-	// Prevent path traversal: resolved path must remain inside pages dir.
-	cleanDir := filepath.Clean(dir) + string(filepath.Separator)
-	if !strings.HasPrefix(filepath.Clean(path), cleanDir) {
-		return fmt.Errorf("%w: %q", ErrInvalidName, name)
+	path, err := pagePath(siteDir, name)
+	if err != nil {
+		return err
 	}
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return fmt.Errorf("%w: %q", ErrPageNotFound, name)
@@ -187,15 +226,17 @@ func Update(siteDir, name string, content []byte) error {
 // and sets updated_at to now.
 func Rename(siteDir, oldName, newName string, now time.Time) error {
 	dir := PagesDir(siteDir)
-	cleanDir := filepath.Clean(dir) + string(filepath.Separator)
-
-	oldPath := filepath.Join(dir, filepath.FromSlash(oldName)+".md")
-	if !strings.HasPrefix(filepath.Clean(oldPath), cleanDir) {
-		return fmt.Errorf("%w: %q", ErrInvalidName, oldName)
+	oldPath, err := pagePath(siteDir, oldName)
+	if err != nil {
+		return err
 	}
-	newPath := filepath.Join(dir, filepath.FromSlash(newName)+".md")
-	if !strings.HasPrefix(filepath.Clean(newPath), cleanDir) {
-		return fmt.Errorf("%w: %q", ErrInvalidName, newName)
+	newPath, err := pagePath(siteDir, newName)
+	if err != nil {
+		return err
+	}
+	// Renaming an index page away would leave the site (or section) without a landing page.
+	if path.Base(oldName) == "index" {
+		return fmt.Errorf("%w: %q (the home page cannot be renamed)", ErrInvalidName, oldName)
 	}
 
 	info, err := os.Stat(oldPath)
@@ -207,6 +248,9 @@ func Rename(siteDir, oldName, newName string, now time.Time) error {
 	}
 	if _, err := os.Lstat(newPath); err == nil {
 		return fmt.Errorf("%w: %q", ErrPageExists, newName)
+	}
+	if err := checkNoConflict(siteDir, newName); err != nil {
+		return err
 	}
 
 	content, err := os.ReadFile(oldPath) //nolint:gosec // oldPath is validated to stay inside the pages dir above
