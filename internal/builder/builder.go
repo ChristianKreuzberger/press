@@ -402,13 +402,29 @@ func copyStaticAssets(siteDir, outputDir string) error {
 			return err
 		}
 		if d.IsDir() {
+			// Hidden directories (.git, .cache, ...) are never published.
+			if strings.HasPrefix(d.Name(), ".") && src != pagesDir {
+				return filepath.SkipDir
+			}
 			return nil
 		}
-		if strings.HasSuffix(d.Name(), ".md") {
+		// Skip symlinks and other non-regular files so a link cannot pull
+		// files from outside the site into the output.
+		if !d.Type().IsRegular() {
+			return nil
+		}
+		if strings.HasPrefix(d.Name(), ".") {
+			return nil
+		}
+		// Markdown in any case is source, not an asset.
+		if strings.EqualFold(filepath.Ext(d.Name()), ".md") {
 			return nil
 		}
 		rel, err := filepath.Rel(pagesDir, src)
 		if err != nil {
+			return err
+		}
+		if err := checkPageCollision(src, rel); err != nil {
 			return err
 		}
 		dst := filepath.Join(outputDir, rel)
@@ -417,6 +433,20 @@ func copyStaticAssets(siteDir, outputDir string) error {
 		}
 		return copyFile(src, dst)
 	})
+}
+
+// checkPageCollision fails when an asset would be written to the same output
+// path as a built page, i.e. about.html next to about.md at the top level or
+// directly inside a section. Deeper directories are not built, so they can't collide.
+func checkPageCollision(src, rel string) error {
+	if !strings.HasSuffix(src, ".html") || strings.Contains(filepath.Dir(rel), string(filepath.Separator)) {
+		return nil
+	}
+	mdPath := strings.TrimSuffix(src, ".html") + ".md"
+	if _, err := os.Lstat(mdPath); err == nil {
+		return fmt.Errorf("asset %s would overwrite the page built from %s", rel, filepath.Base(mdPath))
+	}
+	return nil
 }
 
 // validateStaticDirName checks that staticDirName is safe to use as a path
