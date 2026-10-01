@@ -26,6 +26,7 @@ var (
 	errEmptyStaticDirName   = fmt.Errorf("static directory name must not be empty")
 	errStaticDirNotRelative = fmt.Errorf("static directory name must be relative to the site directory")
 	errStaticDirNotDir      = fmt.Errorf("static directory is not a directory")
+	errAssetPageCollision   = fmt.Errorf("asset would overwrite a built page")
 )
 
 // PageRef holds the title and URL used to generate navigation links.
@@ -402,13 +403,29 @@ func copyStaticAssets(siteDir, outputDir string) error {
 			return err
 		}
 		if d.IsDir() {
+			// Hidden directories (.git, .cache, ...) are never published.
+			if strings.HasPrefix(d.Name(), ".") && src != pagesDir {
+				return filepath.SkipDir
+			}
 			return nil
 		}
-		if strings.HasSuffix(d.Name(), ".md") {
+		// Skip symlinks and other non-regular files so a link cannot pull
+		// files from outside the site into the output.
+		if !d.Type().IsRegular() {
+			return nil
+		}
+		if strings.HasPrefix(d.Name(), ".") {
+			return nil
+		}
+		// Markdown in any case is source, not an asset.
+		if strings.EqualFold(filepath.Ext(d.Name()), ".md") {
 			return nil
 		}
 		rel, err := filepath.Rel(pagesDir, src)
 		if err != nil {
+			return err
+		}
+		if err := checkPageCollision(src, rel); err != nil {
 			return err
 		}
 		dst := filepath.Join(outputDir, rel)
@@ -417,6 +434,21 @@ func copyStaticAssets(siteDir, outputDir string) error {
 		}
 		return copyFile(src, dst)
 	})
+}
+
+// checkPageCollision fails when an asset would be written to the same output
+// path as a built page, i.e. about.html next to about.md at the top level or
+// directly inside a section. Deeper directories are not built, so they can't collide.
+func checkPageCollision(src, rel string) error {
+	ext := filepath.Ext(src)
+	if !strings.EqualFold(ext, ".html") || strings.Contains(filepath.Dir(rel), string(filepath.Separator)) {
+		return nil
+	}
+	mdPath := strings.TrimSuffix(src, ext) + ".md"
+	if _, err := os.Lstat(mdPath); err == nil {
+		return fmt.Errorf("%w: %s (page built from %s)", errAssetPageCollision, rel, filepath.Base(mdPath))
+	}
+	return nil
 }
 
 // validateStaticDirName checks that staticDirName is safe to use as a path
