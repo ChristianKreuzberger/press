@@ -5,6 +5,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strconv"
 	"strings"
@@ -37,33 +38,81 @@ func GenerateSection(title string, now time.Time) []byte {
 	return []byte(s)
 }
 
-// parseField scans the frontmatter block for a line matching "field: value" and
-// returns the value with surrounding double-quotes stripped. Returns empty string
-// when the field is absent or there is no frontmatter block.
-func parseField(content []byte, field string) string {
-	s := string(content)
-	const delim = "---"
-	if !strings.HasPrefix(s, delim+"\n") {
-		return ""
+// delim is the line that opens and closes a frontmatter block.
+const delim = "---"
+
+// isDelimLine reports whether line (without its "\n") is exactly "---",
+// tolerating a trailing "\r" from CRLF files.
+func isDelimLine(line string) bool {
+	return strings.TrimSuffix(line, "\r") == delim
+}
+
+// split locates the frontmatter block in s. s[blockStart:blockEnd] is the text
+// between the delimiter lines, and bodyStart is the offset of the first byte
+// after the closing delimiter line. ok is false when s does not start with a
+// delimiter line or the block is never closed. Both "\n" and "\r\n" line
+// endings are accepted and the closing delimiter must be a whole line.
+func split(s string) (blockStart, blockEnd, bodyStart int, ok bool) {
+	nl := strings.IndexByte(s, '\n')
+	if nl == -1 || !isDelimLine(s[:nl]) {
+		return 0, 0, 0, false
 	}
-	rest := s[len(delim)+1:]
-	end := strings.Index(rest, "\n"+delim)
-	if end == -1 {
-		return ""
+	blockStart = nl + 1
+	for pos := blockStart; pos < len(s); {
+		line, next := s[pos:], len(s)
+		if end := strings.IndexByte(s[pos:], '\n'); end != -1 {
+			line, next = s[pos:pos+end], pos+end+1
+		}
+		if isDelimLine(line) {
+			return blockStart, pos, next, true
+		}
+		pos = next
 	}
-	block := rest[:end]
+	return 0, 0, 0, false
+}
+
+// fieldValue returns the value of a top-level "field: value" line in block.
+func fieldValue(block, field string) string {
 	prefix := field + ":"
 	for _, line := range strings.Split(block, "\n") {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, prefix) {
-			val := strings.TrimSpace(strings.TrimPrefix(trimmed, prefix))
-			if len(val) >= 2 && val[0] == '"' && val[len(val)-1] == '"' {
-				val = val[1 : len(val)-1]
-			}
-			return val
+		line = strings.TrimSuffix(line, "\r")
+		// Column 0 only, so nested keys never match as top-level ones.
+		if strings.HasPrefix(line, prefix) {
+			return cleanValue(strings.TrimPrefix(line, prefix))
 		}
 	}
 	return ""
+}
+
+// cleanValue trims a raw YAML scalar: surrounding quotes (single or double)
+// are removed, and an unquoted value loses any trailing " # comment".
+func cleanValue(val string) string {
+	val = strings.TrimSpace(val)
+	if val == "" {
+		return ""
+	}
+	if q := val[0]; q == '"' || q == '\'' {
+		if end := strings.IndexByte(val[1:], q); end != -1 {
+			return val[1 : 1+end]
+		}
+		return val
+	}
+	if i := strings.Index(val, " #"); i != -1 {
+		val = val[:i]
+	}
+	return strings.TrimSpace(val)
+}
+
+// parseField returns the value of a top-level frontmatter field with quotes and
+// trailing comments removed. Returns empty string when the field is absent or
+// there is no frontmatter block.
+func parseField(content []byte, field string) string {
+	s := string(content)
+	start, end, _, ok := split(s)
+	if !ok {
+		return ""
+	}
+	return fieldValue(s[start:end], field)
 }
 
 // ParseStringField extracts the string value of a named field from YAML frontmatter.
@@ -90,8 +139,11 @@ func ParseTimeField(content []byte, field string) time.Time {
 // Both unquoted (draft: true) and quoted (draft: "true") values are accepted.
 // Returns false when the field is absent or set to any other value.
 func ParseDraft(content []byte) bool {
-	return parseField(content, "draft") == "true"
+	return isTrue(parseField(content, "draft"))
 }
+
+// isTrue reports whether a cleaned scalar is a YAML-style true ("true", "True", "TRUE").
+func isTrue(val string) bool { return strings.EqualFold(val, "true") }
 
 // ParseDraftFromFile opens the file at path and reads only the frontmatter
 // block (up to and including the closing "---" delimiter) to determine
@@ -105,36 +157,28 @@ func ParseDraftFromFile(path string) (bool, error) {
 	}
 	defer func() { _ = f.Close() }() // read-only file, close error is not actionable
 
-	scanner := bufio.NewScanner(f)
-
-	// First line must be "---" to have frontmatter.
-	if !scanner.Scan() {
-		return false, scanner.Err()
-	}
-	if scanner.Text() != "---" {
-		return false, nil
-	}
-
-	draft := false
-	for scanner.Scan() {
-		line := scanner.Text()
-		if line == "---" {
-			// Reached the closing delimiter; return whatever we found.
-			return draft, nil
+	// bufio.Reader (unlike Scanner) has no line length limit.
+	r := bufio.NewReader(f)
+	var sb strings.Builder
+	for first := true; ; first = false {
+		line, err := r.ReadString('\n')
+		sb.WriteString(line)
+		isDelim := isDelimLine(strings.TrimSuffix(line, "\n"))
+		if first && !isDelim {
+			return false, nil
 		}
-		if !draft {
-			trimmed := strings.TrimSpace(line)
-			if strings.HasPrefix(trimmed, "draft:") {
-				val := strings.TrimSpace(strings.TrimPrefix(trimmed, "draft:"))
-				if len(val) >= 2 && val[0] == '"' && val[len(val)-1] == '"' {
-					val = val[1 : len(val)-1]
-				}
-				draft = val == "true"
-			}
+		if !first && isDelim {
+			// Closing delimiter reached; reuse the shared splitter.
+			return isTrue(parseField([]byte(sb.String()), "draft")), nil
+		}
+		if err == io.EOF {
+			// No closing delimiter found: treat as no frontmatter.
+			return false, nil
+		}
+		if err != nil {
+			return false, err
 		}
 	}
-	// No closing delimiter found — treat as no frontmatter.
-	return false, scanner.Err()
 }
 
 // ParseWeight extracts the weight field value from YAML frontmatter.
@@ -171,61 +215,41 @@ func Humanize(name string) string {
 	return strings.Join(words, " ")
 }
 
-// SetField updates the value of a named field in the YAML frontmatter block.
-// The field must already exist in the frontmatter; the new value is written as
-// a double-quoted string. Returns an error if there is no frontmatter or the
-// field is absent.
+// SetField updates the value of a named top-level field in the YAML
+// frontmatter block. The field must already exist in the frontmatter; the new
+// value is written as a double-quoted string and the file's line endings
+// (LF or CRLF) are preserved. Returns an error if there is no frontmatter or
+// the field is absent.
 func SetField(content []byte, field, value string) ([]byte, error) {
 	s := string(content)
-	const delim = "---"
-	if !strings.HasPrefix(s, delim+"\n") {
+	start, end, _, ok := split(s)
+	if !ok {
 		return nil, ErrNoFrontmatter
 	}
-	// Find the closing delimiter.
-	rest := s[len(delim)+1:]
-	end := strings.Index(rest, "\n"+delim)
-	if end == -1 {
-		return nil, ErrNoFrontmatter
-	}
-	block := rest[:end]
-	after := rest[end:] // starts with "\n---"
-
 	prefix := field + ":"
 	found := false
-	lines := strings.Split(block, "\n")
+	lines := strings.Split(s[start:end], "\n")
 	for i, line := range lines {
-		trimmedLeft := strings.TrimLeft(line, " \t")
-		if !found && strings.HasPrefix(trimmedLeft, prefix) {
-			// Preserve any leading whitespace from the original line.
-			leading := line[:len(line)-len(trimmedLeft)]
-			lines[i] = leading + field + ": " + strconv.Quote(value)
+		if !found && strings.HasPrefix(line, prefix) {
+			lines[i] = field + ": " + strconv.Quote(value)
+			if strings.HasSuffix(line, "\r") {
+				lines[i] += "\r"
+			}
 			found = true
 		}
 	}
 	if !found {
 		return nil, fmt.Errorf("%w: %q", ErrFieldNotFound, field)
 	}
-	// after starts with "\n---"; join lines without a trailing newline so no
-	// extra blank line is introduced before the closing delimiter.
-	result := delim + "\n" + strings.Join(lines, "\n") + after
-	return []byte(result), nil
+	return []byte(s[:start] + strings.Join(lines, "\n") + s[end:]), nil
 }
 
 // Strip removes YAML frontmatter from the beginning of a markdown document.
-// If the content does not start with "---\n", it is returned unchanged.
+// If the content has no complete frontmatter block, it is returned unchanged.
 func Strip(content string) string {
-	const delim = "---"
-	if !strings.HasPrefix(content, delim+"\n") {
+	_, _, bodyStart, ok := split(content)
+	if !ok {
 		return content
 	}
-	// Find the closing delimiter after the opening one.
-	rest := content[len(delim)+1:]
-	idx := strings.Index(rest, "\n"+delim)
-	if idx == -1 {
-		return content
-	}
-	after := rest[idx+1+len(delim):]
-	// Skip optional trailing newline after closing delimiter.
-	after = strings.TrimPrefix(after, "\n")
-	return after
+	return content[bodyStart:]
 }
