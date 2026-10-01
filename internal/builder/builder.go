@@ -104,7 +104,8 @@ func Build(siteDir, outputDir string, includeDrafts bool, staticDir string) ([]s
 	}
 	built = append(built, topLevelPaths...)
 
-	if err := copyAssets(siteDir, outputDir, staticDir); err != nil {
+	assetPaths, err := copyAssets(siteDir, outputDir, staticDir)
+	if err != nil {
 		return nil, err
 	}
 
@@ -113,6 +114,13 @@ func Build(siteDir, outputDir string, includeDrafts bool, staticDir string) ([]s
 		return nil, err
 	}
 	built = append(built, sectionPaths...)
+
+	// Only after a fully successful build: drop output from earlier builds
+	// that this build no longer produces.
+	generated := append(append([]string{}, built...), assetPaths...)
+	if err := cleanStale(siteDir, outputDir, staticDir, generated); err != nil {
+		return nil, err
+	}
 
 	return built, nil
 }
@@ -137,14 +145,17 @@ func buildTopLevelPages(pages []page.Page, outputDir string, rootNavRefs []PageR
 // copyAssets copies both static assets from pages/ and the static directory.
 // Static assets are non-Markdown files under pages/.
 // The static directory is copied verbatim if it exists.
-func copyAssets(siteDir, outputDir, staticDir string) error {
-	if err := copyStaticAssets(siteDir, outputDir); err != nil {
-		return err
+// It returns the absolute paths of the files that were written.
+func copyAssets(siteDir, outputDir, staticDir string) ([]string, error) {
+	paths, err := copyStaticAssets(siteDir, outputDir)
+	if err != nil {
+		return nil, err
 	}
-	if err := copyStaticDir(siteDir, outputDir, staticDir); err != nil {
-		return err
+	more, err := copyStaticDir(siteDir, outputDir, staticDir)
+	if err != nil {
+		return nil, err
 	}
-	return nil
+	return append(paths, more...), nil
 }
 
 // buildSections builds all section pages.
@@ -393,12 +404,13 @@ func buildPageFromPath(name, mdPath, outPath string, pageRefs []PageRef, toc []T
 
 // copyStaticAssets copies all non-Markdown files from the pages/ directory
 // to the corresponding location in outputDir, preserving the directory structure.
-func copyStaticAssets(siteDir, outputDir string) error {
+func copyStaticAssets(siteDir, outputDir string) ([]string, error) {
 	pagesDir := page.PagesDir(siteDir)
 	if _, err := os.Stat(pagesDir); os.IsNotExist(err) {
-		return nil
+		return nil, nil
 	}
-	return filepath.WalkDir(pagesDir, func(src string, d os.DirEntry, err error) error {
+	var copied []string
+	err := filepath.WalkDir(pagesDir, func(src string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -432,8 +444,13 @@ func copyStaticAssets(siteDir, outputDir string) error {
 		if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil { //nolint:gosec // generated site output must be world-readable for web servers
 			return fmt.Errorf("creating directory for asset %s: %w", rel, err)
 		}
-		return copyFile(src, dst)
+		if err := copyFile(src, dst); err != nil {
+			return err
+		}
+		copied = append(copied, dst)
+		return nil
 	})
+	return copied, err
 }
 
 // checkPageCollision fails when an asset would be written to the same output
@@ -475,24 +492,25 @@ func validateStaticDirName(staticDirName string) (string, error) {
 // siteDir into a same-named subdirectory of outputDir, preserving the directory
 // structure. Symlinks are skipped. If the source directory does not exist the
 // function returns nil silently.
-func copyStaticDir(siteDir, outputDir, staticDirName string) error {
+func copyStaticDir(siteDir, outputDir, staticDirName string) ([]string, error) {
 	cleanName, err := validateStaticDirName(staticDirName)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	srcDir := filepath.Join(siteDir, cleanName)
 	info, err := os.Stat(srcDir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil
+			return nil, nil
 		}
-		return fmt.Errorf("checking static directory %s: %w", srcDir, err)
+		return nil, fmt.Errorf("checking static directory %s: %w", srcDir, err)
 	}
 	if !info.IsDir() {
-		return fmt.Errorf("%w: %s", errStaticDirNotDir, srcDir)
+		return nil, fmt.Errorf("%w: %s", errStaticDirNotDir, srcDir)
 	}
 	dstDir := filepath.Join(outputDir, cleanName)
-	return filepath.WalkDir(srcDir, func(src string, d os.DirEntry, err error) error {
+	var copied []string
+	err = filepath.WalkDir(srcDir, func(src string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -510,8 +528,13 @@ func copyStaticDir(siteDir, outputDir, staticDirName string) error {
 		if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil { //nolint:gosec // generated site output must be world-readable for web servers
 			return fmt.Errorf("creating directory for static file %s: %w", rel, err)
 		}
-		return copyFile(src, dst)
+		if err := copyFile(src, dst); err != nil {
+			return err
+		}
+		copied = append(copied, dst)
+		return nil
 	})
+	return copied, err
 }
 
 // copyFile copies the file at src to dst.
