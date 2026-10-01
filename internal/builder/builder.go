@@ -26,6 +26,7 @@ var (
 	errEmptyStaticDirName   = fmt.Errorf("static directory name must not be empty")
 	errStaticDirNotRelative = fmt.Errorf("static directory name must be relative to the site directory")
 	errStaticDirNotDir      = fmt.Errorf("static directory is not a directory")
+	errAssetPageCollision   = fmt.Errorf("asset would overwrite a built page")
 )
 
 // PageRef holds the title and URL used to generate navigation links.
@@ -445,7 +446,7 @@ func checkPageCollision(src, rel string) error {
 	}
 	mdPath := strings.TrimSuffix(src, ext) + ".md"
 	if _, err := os.Lstat(mdPath); err == nil {
-		return fmt.Errorf("asset %s would overwrite the page built from %s", rel, filepath.Base(mdPath))
+		return fmt.Errorf("%w: %s (page built from %s)", errAssetPageCollision, rel, filepath.Base(mdPath))
 	}
 	return nil
 }
