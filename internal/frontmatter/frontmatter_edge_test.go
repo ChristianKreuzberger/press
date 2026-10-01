@@ -5,7 +5,36 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
+
+func TestParseStringFieldQuotingAndComments(t *testing.T) {
+	tests := []struct {
+		name, line, want string
+	}{
+		{"escaped double quotes", `title: "My \"Blog\" Post"`, `My "Blog" Post`},
+		{"escaped backslash", `title: "a\\b"`, `a\b`},
+		{"quoted then comment", `title: "a \"b\"" # note`, `a "b"`},
+		{"single quote doubled", `title: 'it''s'`, `it's`},
+		{"tab before comment", "title: true\t# wip", "true"},
+		{"tab and space before comment", "title: true \t# wip", "true"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := ParseStringField([]byte("---\n"+tc.line+"\n---\n"), "title")
+			if got != tc.want {
+				t.Errorf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestGenerateRoundTripsSpecialTitle(t *testing.T) {
+	title := `My "Blog" \ Post`
+	if got := ParseStringField(Generate(title, time.Now()), "title"); got != title {
+		t.Errorf("round trip: got %q, want %q", got, title)
+	}
+}
 
 // draftCases are inputs that both ParseDraft (in-memory) and
 // ParseDraftFromFile (file based) must agree on.

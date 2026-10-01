@@ -91,14 +91,42 @@ func cleanValue(val string) string {
 	if val == "" {
 		return ""
 	}
-	if q := val[0]; q == '"' || q == '\'' {
-		if end := strings.IndexByte(val[1:], q); end != -1 {
-			return val[1 : 1+end]
+	switch val[0] {
+	case '"':
+		// Generate and SetField write strconv-quoted values, so the closing
+		// quote must be found escape-aware and the content unescaped.
+		for i := 1; i < len(val); i++ {
+			if val[i] == '\\' {
+				i++
+			} else if val[i] == '"' {
+				if s, err := strconv.Unquote(val[:i+1]); err == nil {
+					return s
+				}
+				return val[1:i]
+			}
+		}
+		return val
+	case '\'':
+		// In single-quoted YAML a doubled quote is a literal quote.
+		var b strings.Builder
+		for i := 1; i < len(val); i++ {
+			if val[i] != '\'' {
+				b.WriteByte(val[i])
+			} else if i+1 < len(val) && val[i+1] == '\'' {
+				b.WriteByte('\'')
+				i++
+			} else {
+				return b.String()
+			}
 		}
 		return val
 	}
-	if i := strings.Index(val, " #"); i != -1 {
-		val = val[:i]
+	// A comment starts at '#' preceded by a space or tab.
+	for i := 0; i+1 < len(val); i++ {
+		if (val[i] == ' ' || val[i] == '\t') && val[i+1] == '#' {
+			val = val[:i]
+			break
+		}
 	}
 	return strings.TrimSpace(val)
 }
