@@ -104,13 +104,40 @@ func Create(siteDir, name string, content []byte) error {
 		return err
 	}
 	dir := sectionDir(siteDir, name)
-	if _, err := os.Stat(dir); err == nil {
-		return fmt.Errorf("%w: %q", ErrSectionExists, name)
-	}
-	if err := os.MkdirAll(dir, 0750); err != nil {
+	if err := os.MkdirAll(sectionsBaseDir(siteDir), 0750); err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(dir, "index.md"), content, 0644)
+	// Mkdir fails if dir exists, so the existence check and creation are one step.
+	if err := os.Mkdir(dir, 0750); err != nil {
+		if errors.Is(err, os.ErrExist) {
+			return fmt.Errorf("%w: %q", ErrSectionExists, name)
+		}
+		return err
+	}
+	if err := writeIndex(filepath.Join(dir, "index.md"), content); err != nil {
+		// Non-recursive so content added concurrently is never deleted.
+		_ = os.Remove(dir)
+		return err
+	}
+	return nil
+}
+
+// writeIndex creates path with O_EXCL so it never overwrites an existing file.
+func writeIndex(path string, content []byte) error {
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644) //nolint:gosec // path is built from a validated section name
+	if err != nil {
+		return err
+	}
+	if _, err := f.Write(content); err != nil {
+		_ = f.Close()
+		_ = os.Remove(path)
+		return err
+	}
+	if err := f.Close(); err != nil {
+		_ = os.Remove(path)
+		return err
+	}
+	return nil
 }
 
 // requireSection returns ErrSectionNotFound unless dir contains index.md as a
