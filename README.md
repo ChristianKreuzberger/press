@@ -82,7 +82,7 @@ press serve
 | `press check` | Validate pages and internal links; exits with code 1 if issues are found |
 | `press --version` | Print the installed version |
 
-The output directory must be separate from the site: `press build` and `press serve` refuse an `-output` that equals or contains the site directory, `pages/` or the static directory, or lies inside `pages/` or the static directory.
+The output directory must be separate from the site: `press build` and `press serve` refuse an `--output` that equals or contains the site directory, `pages/`, the static directory, `template.html` or `.git`, or lies inside any of them except the site directory itself. `--output` is relative to the site directory.
 
 Run any command with `--help` for detailed usage.
 

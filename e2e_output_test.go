@@ -20,12 +20,13 @@ func TestE2EOutputDirValidation(t *testing.T) {
 		{"build", "--static", "dist"},
 		{"build", "--output", "static"},
 		{"build", "--output", "static/out"},
+		{"build", "--output", "template.html"},
 		{"serve", "--output", "pages"},
 	}
 	for _, args := range bad {
 		out := runExpectError(t, siteDir, args...)
-		if !strings.Contains(out, "output") {
-			t.Errorf("press %v: error should mention the output dir, got: %s", args, out)
+		if !strings.Contains(out, "invalid output directory") {
+			t.Errorf("press %v: want \"invalid output directory\" error, got: %s", args, out)
 		}
 	}
 	if _, err := os.Stat(filepath.Join(siteDir, "pages", "index.html")); err == nil {

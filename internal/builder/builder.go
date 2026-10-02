@@ -63,12 +63,12 @@ type TemplateData struct {
 // silently skipped.
 // It returns the list of absolute paths of HTML files that were written.
 func Build(siteDir, outputDir string, includeDrafts bool, staticDir string) ([]string, error) {
+	if err := validateOutputDir(siteDir, outputDir, staticDir); err != nil {
+		return nil, err
+	}
 	outputDir, err := filepath.Abs(outputDir)
 	if err != nil {
 		return nil, fmt.Errorf("resolving output dir: %w", err)
-	}
-	if err := validateOutputDir(siteDir, outputDir, staticDir); err != nil {
-		return nil, err
 	}
 
 	pages, err := page.List(siteDir)
@@ -583,10 +583,16 @@ func weightLess(wi, wj int) bool {
 }
 
 var errOutputOverlap = errors.New("invalid output directory")
+var errTooManySymlinks = errors.New("too many symlinks")
 
 // validateOutputDir rejects an output dir that would overlap the site's own
-// source directories: writing there would clobber sources or make the build
-// read files it just generated. Paths are compared after resolving symlinks.
+// source files: writing there would clobber sources or make the build read
+// files it just generated. Paths are compared after resolving symlinks.
+// outputDir may be absolute or relative to the working directory (Build and
+// callers join --output under siteDir before calling).
+//
+// Limitation: comparison is case-sensitive, so on case-insensitive
+// filesystems (macOS, Windows) an output such as "PAGES" bypasses the guard.
 func validateOutputDir(siteDir, outputDir, staticDirName string) error {
 	cleanStatic, err := validateStaticDirName(staticDirName)
 	if err != nil {
@@ -596,33 +602,49 @@ func validateOutputDir(siteDir, outputDir, staticDirName string) error {
 	if err != nil {
 		return fmt.Errorf("resolving output dir: %w", err)
 	}
-	protected := map[string]string{
-		"site directory":   siteDir,
-		"pages directory":  filepath.Join(siteDir, "pages"),
-		"static directory": filepath.Join(siteDir, cleanStatic),
+	// Ordered so the reported label is deterministic when several overlap.
+	protected := []struct {
+		label string
+		path  string
+		// mayContainOutput is true for the site dir, which legitimately
+		// contains a nested output dir such as dist/.
+		mayContainOutput bool
+	}{
+		{"site directory", siteDir, true},
+		{"pages directory", filepath.Join(siteDir, "pages"), false},
+		{"static directory", filepath.Join(siteDir, cleanStatic), false},
+		{"template file", filepath.Join(siteDir, "template.html"), false},
+		{"git directory", filepath.Join(siteDir, ".git"), false},
 	}
-	for label, dir := range protected {
-		p, err := resolvePath(dir)
+	for _, d := range protected {
+		p, err := resolvePath(d.path)
 		if err != nil {
-			return fmt.Errorf("resolving %s: %w", label, err)
+			return fmt.Errorf("resolving %s: %w", d.label, err)
 		}
-		// The output may not be the protected dir, inside it, or contain it.
-		// The site dir itself may of course contain a nested output dir.
+		// The output may not be the protected path, inside it, or contain it.
 		overlaps := out == p || isWithin(p, out)
-		if label != "site directory" {
+		if !d.mayContainOutput {
 			overlaps = overlaps || isWithin(out, p)
 		}
 		if overlaps {
-			return fmt.Errorf("%w: %s overlaps the %s (%s); choose a separate directory such as dist", errOutputOverlap, outputDir, label, p)
+			return fmt.Errorf("%w: %s overlaps the %s (%s); choose a separate directory such as dist", errOutputOverlap, outputDir, d.label, p)
 		}
 	}
 	return nil
 }
 
+// maxSymlinkHops bounds manual resolution of dangling symlink chains.
+const maxSymlinkHops = 40
+
 // resolvePath returns an absolute path with symlinks resolved. The path may
 // not exist yet, so the longest existing ancestor is resolved and the
-// remainder appended.
+// remainder appended. A dangling symlink is followed by hand, because
+// EvalSymlinks fails on it and writes would otherwise land in its target.
 func resolvePath(path string) (string, error) {
+	return resolvePathHops(path, 0)
+}
+
+func resolvePathHops(path string, hops int) (string, error) {
 	abs, err := filepath.Abs(path)
 	if err != nil {
 		return "", err
@@ -636,6 +658,19 @@ func resolvePath(path string) (string, error) {
 		if !os.IsNotExist(err) {
 			return "", err
 		}
+		if fi, lerr := os.Lstat(existing); lerr == nil && fi.Mode()&os.ModeSymlink != 0 {
+			if hops >= maxSymlinkHops {
+				return "", fmt.Errorf("%w: %s", errTooManySymlinks, path)
+			}
+			target, rerr := os.Readlink(existing)
+			if rerr != nil {
+				return "", rerr
+			}
+			if !filepath.IsAbs(target) {
+				target = filepath.Join(filepath.Dir(existing), target)
+			}
+			return resolvePathHops(filepath.Join(target, rest), hops+1)
+		}
 		parent := filepath.Dir(existing)
 		if parent == existing {
 			return abs, nil
@@ -645,7 +680,9 @@ func resolvePath(path string) (string, error) {
 	}
 }
 
-// isWithin reports whether child is strictly inside parent.
+// isWithin reports whether child is strictly inside parent (not equal to it).
+// Argument order is (child, parent): isWithin("/a/b", "/a") is true and
+// isWithin("/a", "/a/b") is false.
 func isWithin(child, parent string) bool {
 	rel, err := filepath.Rel(parent, child)
 	return err == nil && rel != "." && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
