@@ -2,6 +2,7 @@
 package builder
 
 import (
+	"errors"
 	"fmt"
 	"html/template"
 	"io"
@@ -65,6 +66,9 @@ func Build(siteDir, outputDir string, includeDrafts bool, staticDir string) ([]s
 	outputDir, err := filepath.Abs(outputDir)
 	if err != nil {
 		return nil, fmt.Errorf("resolving output dir: %w", err)
+	}
+	if err := validateOutputDir(siteDir, outputDir, staticDir); err != nil {
+		return nil, err
 	}
 
 	pages, err := page.List(siteDir)
@@ -576,4 +580,73 @@ func weightLess(wi, wj int) bool {
 		return true
 	}
 	return wi < wj
+}
+
+var errOutputOverlap = errors.New("invalid output directory")
+
+// validateOutputDir rejects an output dir that would overlap the site's own
+// source directories: writing there would clobber sources or make the build
+// read files it just generated. Paths are compared after resolving symlinks.
+func validateOutputDir(siteDir, outputDir, staticDirName string) error {
+	cleanStatic, err := validateStaticDirName(staticDirName)
+	if err != nil {
+		return err
+	}
+	out, err := resolvePath(outputDir)
+	if err != nil {
+		return fmt.Errorf("resolving output dir: %w", err)
+	}
+	protected := map[string]string{
+		"site directory":   siteDir,
+		"pages directory":  filepath.Join(siteDir, "pages"),
+		"static directory": filepath.Join(siteDir, cleanStatic),
+	}
+	for label, dir := range protected {
+		p, err := resolvePath(dir)
+		if err != nil {
+			return fmt.Errorf("resolving %s: %w", label, err)
+		}
+		// The output may not be the protected dir, inside it, or contain it.
+		// The site dir itself may of course contain a nested output dir.
+		overlaps := out == p || isWithin(p, out)
+		if label != "site directory" {
+			overlaps = overlaps || isWithin(out, p)
+		}
+		if overlaps {
+			return fmt.Errorf("%w: %s overlaps the %s (%s); choose a separate directory such as dist", errOutputOverlap, outputDir, label, p)
+		}
+	}
+	return nil
+}
+
+// resolvePath returns an absolute path with symlinks resolved. The path may
+// not exist yet, so the longest existing ancestor is resolved and the
+// remainder appended.
+func resolvePath(path string) (string, error) {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+	existing, rest := abs, ""
+	for {
+		resolved, err := filepath.EvalSymlinks(existing)
+		if err == nil {
+			return filepath.Join(resolved, rest), nil
+		}
+		if !os.IsNotExist(err) {
+			return "", err
+		}
+		parent := filepath.Dir(existing)
+		if parent == existing {
+			return abs, nil
+		}
+		rest = filepath.Join(filepath.Base(existing), rest)
+		existing = parent
+	}
+}
+
+// isWithin reports whether child is strictly inside parent.
+func isWithin(child, parent string) bool {
+	rel, err := filepath.Rel(parent, child)
+	return err == nil && rel != "." && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
