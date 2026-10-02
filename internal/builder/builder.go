@@ -63,7 +63,8 @@ type TemplateData struct {
 // outputDir while preserving directory structure; if it does not exist it is
 // silently skipped.
 // outputDir is emptied first so stale files from removed or drafted pages do not
-// survive; Build refuses an outputDir that overlaps the site sources.
+// survive. Build refuses an outputDir that overlaps the site sources, or that is
+// non-empty and not recognisable as press output (see checkOutputDir).
 // It returns the list of absolute paths of HTML files that were written.
 func Build(siteDir, outputDir string, includeDrafts bool, staticDir string) ([]string, error) {
 	if err := validateOutputDir(siteDir, outputDir, staticDir); err != nil {
@@ -72,6 +73,13 @@ func Build(siteDir, outputDir string, includeDrafts bool, staticDir string) ([]s
 	outputDir, err := filepath.Abs(outputDir)
 	if err != nil {
 		return nil, fmt.Errorf("resolving output dir: %w", err)
+	}
+
+	// Validate first: it has no side effects, so a refused output dir leaves
+	// nothing behind (not even an empty directory).
+	resolvedOut, err := checkOutputDir(siteDir, outputDir, staticDir)
+	if err != nil {
+		return nil, err
 	}
 
 	pages, err := page.List(siteDir)
@@ -103,9 +111,10 @@ func Build(siteDir, outputDir string, includeDrafts bool, staticDir string) ([]s
 		return nil, fmt.Errorf("creating output directory: %w", err)
 	}
 
-	// Clean only after everything that can fail early has succeeded, so a bad
-	// template doesn't leave the user with an emptied dist/.
-	if err := cleanOutputDir(siteDir, outputDir, staticDir); err != nil {
+	// Clean after the template and nav checks, so a bad template keeps the
+	// previous output. Failures while rendering pages, copying assets or building
+	// sections happen after this point and can still leave a partly built dir.
+	if err := cleanOutputDir(resolvedOut); err != nil {
 		return nil, err
 	}
 
