@@ -316,13 +316,8 @@ func buildSectionTOC(pages []section.Page, indexContent []byte, includeDrafts bo
 			})
 			continue
 		}
-		body := frontmatter.Strip(string(content))
-		title := markdown.ExtractTitle(body)
-		if title == "" {
-			title = p.Name
-		}
 		entries = append(entries, TOCEntry{
-			Title:     title,
+			Title:     resolveTitleFromContent(p.Name, content),
 			URL:       pageURL(p.Name),
 			CreatedAt: frontmatter.ParseTimeField(content, "created_at"),
 			UpdatedAt: frontmatter.ParseTimeField(content, "updated_at"),
@@ -381,13 +376,9 @@ func buildPageFromPath(name, mdPath, outPath string, pageRefs []PageRef, toc []T
 
 	mdStr := frontmatter.Strip(string(mdContent))
 	htmlContent := markdown.ToHTML(mdStr)
-	title := markdown.ExtractTitle(mdStr)
-	if title == "" {
-		title = name
-	}
 
 	data := TemplateData{
-		Title:           title,
+		Title:           resolveTitleFromContent(name, mdContent),
 		Content:         template.HTML(htmlContent), //nolint:gosec // markdown is trusted content from the user's own files
 		Pages:           pageRefs,
 		TableOfContents: toc,
@@ -570,11 +561,13 @@ func readTemplate(siteDir string) (string, error) {
 	return string(content), nil
 }
 
-// resolveTitleFromContent extracts the first Markdown heading from content as
-// the page title, falling back to name when no heading is found.
+// resolveTitleFromContent returns the page title: the frontmatter title if
+// set, else the first H1 of the body as plain text, else name.
 func resolveTitleFromContent(name string, content []byte) string {
-	body := frontmatter.Strip(string(content))
-	if t := markdown.ExtractTitle(body); t != "" {
+	if t := strings.TrimSpace(frontmatter.ParseStringField(content, "title")); t != "" {
+		return t
+	}
+	if t := markdown.ExtractTitle(frontmatter.Strip(string(content))); t != "" {
 		return t
 	}
 	return name

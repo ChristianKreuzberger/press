@@ -10,9 +10,12 @@ import (
 	"strings"
 
 	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/extension"
 	"github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/renderer/html"
+	"github.com/yuin/goldmark/text"
+	"github.com/yuin/goldmark/util"
 )
 
 // ytShortcode matches !youtube[VIDEO_ID] where VIDEO_ID is an 11-character
@@ -99,13 +102,38 @@ func ToHTML(md string) string {
 	return buf.String()
 }
 
-// ExtractTitle returns the text of the first level-1 heading in the Markdown,
-// or an empty string if none is found.
+// ExtractTitle returns the plain text of the first level-1 heading in the
+// Markdown, or an empty string if none is found. It parses the document, so
+// "# comment" lines inside code blocks are ignored, and inline formatting,
+// entities and raw HTML are reduced to text (the template escapes the result).
 func ExtractTitle(md string) string {
-	for _, line := range strings.Split(md, "\n") {
-		if strings.HasPrefix(line, "# ") {
-			return strings.TrimSpace(line[2:])
+	src := []byte(md)
+	doc := gm.Parser().Parse(text.NewReader(src))
+	for n := doc.FirstChild(); n != nil; n = n.NextSibling() {
+		if h, ok := n.(*ast.Heading); ok && h.Level == 1 {
+			var b strings.Builder
+			plainText(&b, h, src)
+			return strings.Join(strings.Fields(b.String()), " ")
 		}
 	}
 	return ""
+}
+
+// plainText appends the visible text under n to b.
+func plainText(b *strings.Builder, n ast.Node, src []byte) {
+	for c := n.FirstChild(); c != nil; c = c.NextSibling() {
+		switch v := c.(type) {
+		case *ast.Text:
+			b.WriteString(stdhtml.UnescapeString(string(util.UnescapePunctuations(v.Segment.Value(src)))))
+			if v.SoftLineBreak() || v.HardLineBreak() {
+				b.WriteByte(' ')
+			}
+		case *ast.String:
+			b.Write(v.Value)
+		case *ast.RawHTML:
+			// Tags carry no visible text.
+		default:
+			plainText(b, c, src)
+		}
+	}
 }

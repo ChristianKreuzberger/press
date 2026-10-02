@@ -7,8 +7,8 @@ import (
 
 func TestToHTML_Headings(t *testing.T) {
 	cases := []struct {
-		input   string
-		wantTag string
+		input    string
+		wantTag  string
 		wantText string
 	}{
 		{"# H1", "h1", "H1"},
@@ -307,6 +307,12 @@ func TestExtractTitle(t *testing.T) {
 		{"No heading here", ""},
 		{"#NoSpace", ""},
 		{"# Title With Extra Spaces  ", "Title With Extra Spaces"},
+		{"```\n# comment\n```\n# Real", "Real"},
+		{"~~~sh\n# comment\n~~~\n", ""},
+		{"# Post *em* &amp; <b>x</b> `code` [link](http://x)", "Post em & x code link"},
+		{"# Escaped \\*star\\*", "Escaped *star*"},
+		{"Setext Title\n=====", "Setext Title"},
+		{"    # indented code\n", ""},
 	}
 	for _, c := range cases {
 		got := ExtractTitle(c.input)
