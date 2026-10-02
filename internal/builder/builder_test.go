@@ -1213,7 +1213,7 @@ func TestBuildEscapesSpecialCharsInLinks(t *testing.T) {
 	siteDir := t.TempDir()
 	outDir := filepath.Join(siteDir, "dist")
 
-	for _, name := range []string{"index", "my page#1", "q?a", "100%"} {
+	for _, name := range []string{"index", "my page#1", "q?a", "a%20b", "café"} {
 		if err := page.Create(siteDir, name, []byte("# T\n\nbody\n")); err != nil {
 			t.Fatal(err)
 		}
@@ -1239,15 +1239,16 @@ func TestBuildEscapesSpecialCharsInLinks(t *testing.T) {
 	}
 	for _, want := range []string{
 		`href="my%20page%231.html"`,
-		`href="q%3fa.html"`,
-		`href="100%25.html"`,
+		`href="q%3Fa.html"`,
+		`href="a%2520b.html"`,
+		`href="caf%C3%A9.html"`,
 		`href="my%20sec%231/index.html"`,
 	} {
-		if !strings.Contains(strings.ToLower(string(index)), strings.ToLower(want)) {
+		if !strings.Contains(string(index), want) {
 			t.Errorf("index.html missing %s", want)
 		}
 	}
-	if !strings.Contains(strings.ToLower(string(sec)), `href="in%20ner%3f.html"`) {
+	if !strings.Contains(string(sec), `href="in%20ner%3F.html"`) {
 		t.Errorf("section TOC link not escaped:\n%s", sec)
 	}
 }
