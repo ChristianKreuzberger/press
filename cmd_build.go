@@ -8,6 +8,7 @@ import (
 
 	"github.com/ChristianKreuzberger/press/internal/builder"
 	"github.com/ChristianKreuzberger/press/internal/minify"
+	"github.com/ChristianKreuzberger/press/internal/page"
 )
 
 func runBuild(args []string) {
@@ -28,6 +29,12 @@ func runBuild(args []string) {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "build failed: %v\n", err)
 		os.Exit(1)
+	}
+	// Not fatal: the site still builds, but ignored files should never be silent.
+	if skipped, err := page.Skipped(siteDir); err == nil {
+		for _, rel := range skipped {
+			fmt.Fprintf(os.Stderr, "warning: skipping pages/%s (only page.md and section/page.md are built; sections need an index.md)\n", rel)
+		}
 	}
 	var before, after int64
 	if *minifyFlag {

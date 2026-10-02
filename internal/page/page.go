@@ -82,6 +82,63 @@ func validateName(name string) error {
 	return nil
 }
 
+// maxNameSegments is the deepest layout the builder publishes: page or
+// section/page. Deeper files would be silently ignored, so they are refused.
+const maxNameSegments = 2
+
+// validateNewName is validateName plus the depth limit, for names that are
+// about to be written. Existing deep files can still be deleted or updated.
+func validateNewName(name string) error {
+	if err := validateName(name); err != nil {
+		return err
+	}
+	if strings.Count(name, "/")+1 > maxNameSegments {
+		return fmt.Errorf("%w: %q (use page or section/page; deeper nesting is not built)", ErrInvalidName, name)
+	}
+	return nil
+}
+
+// Skipped returns the pages/-relative paths of .md files that the build
+// ignores: files nested deeper than section/page, and files in a section
+// directory that has no index.md. Hidden directories are not scanned.
+func Skipped(siteDir string) ([]string, error) {
+	base := PagesDir(siteDir)
+	var skipped []string
+	err := filepath.WalkDir(base, func(p string, d os.DirEntry, err error) error {
+		if err != nil {
+			if os.IsNotExist(err) && p == base {
+				return nil
+			}
+			return err
+		}
+		if d.IsDir() {
+			if p != base && strings.HasPrefix(d.Name(), ".") {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !d.Type().IsRegular() || !strings.EqualFold(filepath.Ext(d.Name()), ".md") {
+			return nil
+		}
+		rel, err := filepath.Rel(base, p)
+		if err != nil {
+			return err
+		}
+		segs := strings.Count(filepath.ToSlash(rel), "/") + 1
+		if segs > maxNameSegments {
+			skipped = append(skipped, filepath.ToSlash(rel))
+			return nil
+		}
+		if segs == maxNameSegments {
+			if _, err := os.Stat(filepath.Join(filepath.Dir(p), "index.md")); err != nil {
+				skipped = append(skipped, filepath.ToSlash(rel))
+			}
+		}
+		return nil
+	})
+	return skipped, err
+}
+
 // pagePath validates name and returns the absolute path of its .md file.
 func pagePath(siteDir, name string) (string, error) {
 	if err := validateName(name); err != nil {
@@ -109,11 +166,14 @@ func checkNoConflict(siteDir, name string) error {
 }
 
 // Create creates a new page with the given name and content.
-// name may contain forward slashes to place the page inside sub-sections
-// (e.g. "blog/my-post" or "blog/2026/my-post").
+// name is either "page" or "section/page" (e.g. "blog/my-post"); deeper
+// names are rejected because the builder does not publish them.
 // It returns an error if a page with that name already exists.
 func Create(siteDir, name string, content []byte) error {
 	dir := PagesDir(siteDir)
+	if err := validateNewName(name); err != nil {
+		return err
+	}
 	path, err := pagePath(siteDir, name)
 	if err != nil {
 		return err
@@ -228,6 +288,9 @@ func Rename(siteDir, oldName, newName string, now time.Time) error {
 	dir := PagesDir(siteDir)
 	oldPath, err := pagePath(siteDir, oldName)
 	if err != nil {
+		return err
+	}
+	if err := validateNewName(newName); err != nil {
 		return err
 	}
 	newPath, err := pagePath(siteDir, newName)

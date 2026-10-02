@@ -416,7 +416,6 @@ func TestE2ESectionTOC(t *testing.T) {
 	}
 }
 
-
 func TestE2ECheck(t *testing.T) {
 	siteDir := t.TempDir()
 	pagesDir := filepath.Join(siteDir, "pages")

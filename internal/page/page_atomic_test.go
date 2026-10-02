@@ -34,7 +34,7 @@ func TestCreateDoesNotOverwriteExisting(t *testing.T) {
 func TestCreateFailureLeavesNoEmptyDirs(t *testing.T) {
 	dir := t.TempDir()
 	// An over-long file name makes the write fail after the parents are created.
-	name := "newsec/deeper/" + strings.Repeat("x", 300)
+	name := "newsec/" + strings.Repeat("x", 300)
 	if err := Create(dir, name, []byte("x")); err == nil {
 		t.Fatal("expected error")
 	}
@@ -89,10 +89,10 @@ func TestRenamePreservesMode(t *testing.T) {
 
 func TestRenameCleansEmptyParents(t *testing.T) {
 	dir := t.TempDir()
-	if err := Create(dir, "blog/2026/post", []byte(fm)); err != nil {
+	if err := Create(dir, "blog/post", []byte(fm)); err != nil {
 		t.Fatal(err)
 	}
-	if err := Rename(dir, "blog/2026/post", "top", time.Now()); err != nil {
+	if err := Rename(dir, "blog/post", "top", time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(filepath.Join(PagesDir(dir), "blog")); err == nil {
@@ -120,10 +120,10 @@ func TestRenameKeepsNonEmptyParents(t *testing.T) {
 
 func TestDeleteCleansEmptyParents(t *testing.T) {
 	dir := t.TempDir()
-	if err := Create(dir, "blog/2026/post", []byte("x")); err != nil {
+	if err := Create(dir, "blog/post", []byte("x")); err != nil {
 		t.Fatal(err)
 	}
-	if err := Delete(dir, "blog/2026/post"); err != nil {
+	if err := Delete(dir, "blog/post"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(filepath.Join(PagesDir(dir), "blog")); err == nil {
