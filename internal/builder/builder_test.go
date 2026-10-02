@@ -1206,3 +1206,48 @@ func TestBuildStaticDirInvalidName(t *testing.T) {
 		t.Fatal("expected Build to fail for traversal static dir name, got nil")
 	}
 }
+
+// Names with URL-special characters must be percent-encoded in generated
+// links, otherwise "#" starts a fragment and "?" a query and the link 404s.
+func TestBuildEscapesSpecialCharsInLinks(t *testing.T) {
+	siteDir := t.TempDir()
+	outDir := filepath.Join(siteDir, "dist")
+
+	for _, name := range []string{"index", "my page#1", "q?a", "100%"} {
+		if err := page.Create(siteDir, name, []byte("# T\n\nbody\n")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := section.Create(siteDir, "my sec#1", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := page.Create(siteDir, "my sec#1/in ner?", []byte("# Inner\n")); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := Build(siteDir, outDir, false, "static"); err != nil {
+		t.Fatalf("Build failed: %v", err)
+	}
+
+	index, err := os.ReadFile(filepath.Join(outDir, "index.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sec, err := os.ReadFile(filepath.Join(outDir, "my sec#1", "index.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`href="my%20page%231.html"`,
+		`href="q%3fa.html"`,
+		`href="100%25.html"`,
+		`href="my%20sec%231/index.html"`,
+	} {
+		if !strings.Contains(strings.ToLower(string(index)), strings.ToLower(want)) {
+			t.Errorf("index.html missing %s", want)
+		}
+	}
+	if !strings.Contains(strings.ToLower(string(sec)), `href="in%20ner%3f.html"`) {
+		t.Errorf("section TOC link not escaped:\n%s", sec)
+	}
+}
