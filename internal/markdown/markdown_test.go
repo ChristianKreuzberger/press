@@ -313,6 +313,8 @@ func TestExtractTitle(t *testing.T) {
 		{"# Escaped \\*star\\*", "Escaped *star*"},
 		{"Setext Title\n=====", "Setext Title"},
 		{"    # indented code\n", ""},
+		{"# See https://example.com now", "See https://example.com now"},
+		{"# Mail <a@b.com> x", "Mail a@b.com x"},
 	}
 	for _, c := range cases {
 		got := ExtractTitle(c.input)

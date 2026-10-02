@@ -124,12 +124,18 @@ func plainText(b *strings.Builder, n ast.Node, src []byte) {
 	for c := n.FirstChild(); c != nil; c = c.NextSibling() {
 		switch v := c.(type) {
 		case *ast.Text:
+			// goldmark keeps entities raw in Text segments, so decode them
+			// after resolving backslash escapes. (An escaped "\&amp;" ends up
+			// as "&"; accepted as a rare edge case.)
 			b.WriteString(stdhtml.UnescapeString(string(util.UnescapePunctuations(v.Segment.Value(src)))))
 			if v.SoftLineBreak() || v.HardLineBreak() {
 				b.WriteByte(' ')
 			}
 		case *ast.String:
 			b.Write(v.Value)
+		case *ast.AutoLink:
+			// Autolinks have no child nodes; their text is the label.
+			b.Write(v.Label(src))
 		case *ast.RawHTML:
 			// Tags carry no visible text.
 		default:

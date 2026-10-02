@@ -1252,3 +1252,20 @@ func TestBuildEscapesSpecialCharsInLinks(t *testing.T) {
 		t.Errorf("section TOC link not escaped:\n%s", sec)
 	}
 }
+
+func TestResolveTitleFromContent(t *testing.T) {
+	cases := []struct {
+		name, content, want string
+	}{
+		{"x", "---\ntitle: \"FM\"\n---\n# H1\n", "FM"},
+		{"x", "---\ntitle: \"\"\n---\n# H1\n", "H1"},
+		{"x", "---\ntitle: \"   \"\n---\n# H1\n", "H1"},
+		{"x", "---\ntitle: \"\"\n---\nno heading\n", "x"},
+		{"x", "# Only H1\n", "Only H1"},
+	}
+	for _, c := range cases {
+		if got := resolveTitleFromContent(c.name, []byte(c.content)); got != c.want {
+			t.Errorf("resolveTitleFromContent(%q) = %q; want %q", c.content, got, c.want)
+		}
+	}
+}
