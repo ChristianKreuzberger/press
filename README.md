@@ -73,7 +73,7 @@ press serve
 | `press delete section <name>` | Delete a section and all its pages (a folder without `index.md` is not a section and is left alone) |
 | `press rename page <old> <new>` | Rename a page; updates title and `updated_at` in frontmatter |
 | `press rename section <old> <new>` | Rename a section; updates title and `updated_at` in its `index.md` |
-| `press build [-output dir] [--static dir] [--minify]` | Build the site into `dist/` (default); draft pages are skipped; `--minify` strips comments and indentation from the HTML |
+| `press build [-output dir] [--static dir] [--minify]` | Build the site into `dist/` (default), emptying it first so removed or drafted pages don't linger (refuses an output dir that overlaps your sources); draft pages are skipped; `--minify` strips comments and indentation from the HTML |
 | `press build --drafts [-output dir]` | Build including draft pages |
 | `press serve [-port N] [-host addr] [-output dir] [--static dir]` | Build and serve the site locally (listens on 127.0.0.1 by default); rebuilds on file changes |
 | `press serve --host 0.0.0.0` | Expose the dev server to your network (prints a warning) |

@@ -62,6 +62,8 @@ type TemplateData struct {
 // staticDir names a directory relative to siteDir whose files are copied into
 // outputDir while preserving directory structure; if it does not exist it is
 // silently skipped.
+// outputDir is emptied first so stale files from removed or drafted pages do not
+// survive; Build refuses an outputDir that overlaps the site sources.
 // It returns the list of absolute paths of HTML files that were written.
 func Build(siteDir, outputDir string, includeDrafts bool, staticDir string) ([]string, error) {
 	if err := validateOutputDir(siteDir, outputDir, staticDir); err != nil {
@@ -99,6 +101,12 @@ func Build(siteDir, outputDir string, includeDrafts bool, staticDir string) ([]s
 
 	if err := os.MkdirAll(outputDir, 0755); err != nil { //nolint:gosec // generated site output must be world-readable for web servers
 		return nil, fmt.Errorf("creating output directory: %w", err)
+	}
+
+	// Clean only after everything that can fail early has succeeded, so a bad
+	// template doesn't leave the user with an emptied dist/.
+	if err := cleanOutputDir(siteDir, outputDir, staticDir); err != nil {
+		return nil, err
 	}
 
 	var built []string
