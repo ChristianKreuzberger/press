@@ -86,6 +86,12 @@ func validateName(name string) error {
 // section/page. Deeper files would be silently ignored, so they are refused.
 const maxNameSegments = 2
 
+// flattenHint suggests a section/page name for a too-deep one.
+func flattenHint(name string) string {
+	segs := strings.Split(name, "/")
+	return segs[0] + "/" + segs[len(segs)-1]
+}
+
 // validateNewName is validateName plus the depth limit, for names that are
 // about to be written. Existing deep files can still be deleted or updated.
 func validateNewName(name string) error {
@@ -93,17 +99,41 @@ func validateNewName(name string) error {
 		return err
 	}
 	if strings.Count(name, "/")+1 > maxNameSegments {
-		return fmt.Errorf("%w: %q (use page or section/page; deeper nesting is not built)", ErrInvalidName, name)
+		return fmt.Errorf("%w: %q (use page or section/page; deeper nesting is not built; to flatten an existing page: press rename page %s %s)", ErrInvalidName, name, name, flattenHint(name))
 	}
 	return nil
 }
 
-// Skipped returns the pages/-relative paths of .md files that the build
-// ignores: files nested deeper than section/page, and files in a section
-// directory that has no index.md. Hidden directories are not scanned.
-func Skipped(siteDir string) ([]string, error) {
+// Reason says why the build ignores a file.
+type Reason string
+
+// Reasons a file under pages/ is not built.
+const (
+	// ReasonTooDeep: the builder only publishes page and section/page.
+	ReasonTooDeep Reason = "nested deeper than section/page"
+	// ReasonNoIndex: only directories with an index.md are sections.
+	ReasonNoIndex Reason = "its directory has no index.md, so it is not a section"
+	// ReasonExtension: the builder matches ".md" case-sensitively.
+	ReasonExtension Reason = "the extension must be lowercase .md"
+)
+
+// Skip is a file under pages/ that the build ignores.
+type Skip struct {
+	Path   string // relative to pages/, slash-separated
+	Reason Reason
+}
+
+// Skipped mirrors the builder's rules (see List and section.ListPages) to
+// report .md-like files it ignores. Only lowercase ".md" is built; top-level
+// files are always pages; a directory is a section only if it has a regular
+// index.md; nothing deeper than section/page is built. Hidden directories are
+// not scanned. Symlinked .md files are built, symlinked directories are
+// ignored by the builder and are not scanned here either. A directory that
+// holds .md files but no index.md (e.g. assets/README.md) is reported; add an
+// index.md or move the files out of pages/ to silence it.
+func Skipped(siteDir string) ([]Skip, error) {
 	base := PagesDir(siteDir)
-	var skipped []string
+	var skipped []Skip
 	err := filepath.WalkDir(base, func(p string, d os.DirEntry, err error) error {
 		if err != nil {
 			if os.IsNotExist(err) && p == base {
@@ -117,21 +147,23 @@ func Skipped(siteDir string) ([]string, error) {
 			}
 			return nil
 		}
-		if !d.Type().IsRegular() || !strings.EqualFold(filepath.Ext(d.Name()), ".md") {
+		if !strings.EqualFold(filepath.Ext(d.Name()), ".md") {
 			return nil
 		}
-		rel, err := filepath.Rel(base, p)
+		relOS, err := filepath.Rel(base, p)
 		if err != nil {
 			return err
 		}
-		segs := strings.Count(filepath.ToSlash(rel), "/") + 1
-		if segs > maxNameSegments {
-			skipped = append(skipped, filepath.ToSlash(rel))
-			return nil
-		}
-		if segs == maxNameSegments {
-			if _, err := os.Stat(filepath.Join(filepath.Dir(p), "index.md")); err != nil {
-				skipped = append(skipped, filepath.ToSlash(rel))
+		rel := filepath.ToSlash(relOS)
+		segs := strings.Count(rel, "/") + 1
+		switch {
+		case filepath.Ext(d.Name()) != ".md":
+			skipped = append(skipped, Skip{rel, ReasonExtension})
+		case segs > maxNameSegments:
+			skipped = append(skipped, Skip{rel, ReasonTooDeep})
+		case segs == maxNameSegments:
+			if info, err := os.Stat(filepath.Join(filepath.Dir(p), "index.md")); err != nil || !info.Mode().IsRegular() {
+				skipped = append(skipped, Skip{rel, ReasonNoIndex})
 			}
 		}
 		return nil

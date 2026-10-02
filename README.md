@@ -64,7 +64,7 @@ press serve
 |---------|-------------|
 | `press init [dir] [--theme name]` | Scaffold a new site (`template.html` + `pages/`); choose a built-in theme |
 | `press list page` | List all pages |
-| `press create page <name> [--file f.md]` | Create a new page; `name` is `page` or `section/page` (e.g. `blog/my-post`); deeper nesting is rejected |
+| `press create page <name> [--file f.md]` | Create a new page; `name` is `page` or `section/page` (e.g. `blog/my-post`); deeper nesting is rejected (move an old page with `press rename page blog/2026/post blog/post`) |
 | `press update page <name> --file f.md` | Replace a page's content |
 | `press delete page <name>` | Delete a page |
 | `press list section` | List all sections |

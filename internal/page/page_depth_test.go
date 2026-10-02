@@ -35,15 +35,23 @@ func TestRenameRejectsTooDeepTarget(t *testing.T) {
 
 func TestSkipped(t *testing.T) {
 	dir := t.TempDir()
-	files := map[string]bool{ // path -> expected to be reported
-		"index.md":          false,
-		"about.md":          false,
-		"blog/index.md":     false,
-		"blog/post.md":      false,
-		"blog/2026/post.md": true,
-		"noindex/post.md":   true,
-		".hidden/post.md":   false,
-		"blog/image.png":    false,
+	files := map[string]Reason{ // path -> expected reason ("" = not reported)
+		"index.md":           "",
+		"about.md":           "",
+		"About.MD":           ReasonExtension,
+		"blog/index.md":      "",
+		"blog/post.md":       "",
+		"blog/Post.Md":       ReasonExtension,
+		"blog/2026/post.md":  ReasonTooDeep,
+		"blog/2026/img.png":  "",
+		"blog/image.png":     "",
+		"noindex/post.md":    ReasonNoIndex,
+		".hidden/post.md":    "",
+		"a/b/c/d.md":         ReasonTooDeep,
+		"noindex/x/deep.md":  ReasonTooDeep,
+		"assets/README.md":   ReasonNoIndex,
+		"assets/logo.svg":    "",
+		"onlyassets/pic.png": "",
 	}
 	for rel := range files {
 		p := filepath.Join(PagesDir(dir), filepath.FromSlash(rel))
@@ -54,19 +62,55 @@ func TestSkipped(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	// A symlinked .md file is built (the builder only checks IsDir), so it is
+	// not reported at the top level or in a section; a symlinked directory is
+	// ignored by the builder and not scanned here.
+	pages := PagesDir(dir)
+	if err := os.Symlink(filepath.Join(pages, "about.md"), filepath.Join(pages, "link.md")); err != nil {
+		t.Skip("symlinks unsupported:", err)
+	}
+	if err := os.Symlink(filepath.Join(pages, "about.md"), filepath.Join(pages, "blog", "link.md")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(pages, "noindex"), filepath.Join(pages, "linkdir")); err != nil {
+		t.Fatal(err)
+	}
+
 	got, err := Skipped(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 2 {
-		t.Fatalf("got %v, want blog/2026/post.md and noindex/post.md", got)
-	}
+	reported := map[string]Reason{}
 	for _, g := range got {
-		if !files[g] {
-			t.Errorf("unexpected skip report %q", g)
+		reported[g.Path] = g.Reason
+	}
+	for rel, want := range files {
+		if reported[rel] != want {
+			t.Errorf("%s: got reason %q, want %q", rel, reported[rel], want)
+		}
+	}
+	for rel := range reported {
+		if _, ok := files[rel]; !ok {
+			t.Errorf("unexpected skip report %q", rel)
 		}
 	}
 	if got, err := Skipped(t.TempDir()); err != nil || len(got) != 0 {
 		t.Errorf("missing pages dir: got %v, %v", got, err)
+	}
+}
+
+// Create allows a/b even when section a has no index.md; the build then
+// ignores it, which Skipped must report.
+func TestSkippedReportsPageInDirWithoutIndex(t *testing.T) {
+	dir := t.TempDir()
+	if err := Create(dir, "a/b", []byte("x")); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Skipped(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].Path != "a/b.md" || got[0].Reason != ReasonNoIndex {
+		t.Errorf("got %v", got)
 	}
 }

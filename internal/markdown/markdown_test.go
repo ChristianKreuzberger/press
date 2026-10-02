@@ -7,8 +7,8 @@ import (
 
 func TestToHTML_Headings(t *testing.T) {
 	cases := []struct {
-		input    string
-		wantTag  string
+		input   string
+		wantTag string
 		wantText string
 	}{
 		{"# H1", "h1", "H1"},
