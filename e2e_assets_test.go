@@ -46,3 +46,44 @@ func TestE2EAssetCopySafety(t *testing.T) {
 		t.Errorf("error should mention about.html, got: %s", out)
 	}
 }
+
+func TestE2EBuildRemovesStaleOutput(t *testing.T) {
+	siteDir := t.TempDir()
+	run(t, siteDir, "init")
+	pagesDir := filepath.Join(siteDir, "pages")
+	dist := filepath.Join(siteDir, "dist")
+
+	writeFile(t, filepath.Join(pagesDir, "gone.md"), "# Gone\n")
+	writeFile(t, filepath.Join(pagesDir, "secret.md"), "# Secret\n")
+	run(t, siteDir, "build")
+	for _, name := range []string{"gone.html", "secret.html"} {
+		if _, err := os.Stat(filepath.Join(dist, name)); err != nil {
+			t.Fatalf("first build should create dist/%s", name)
+		}
+	}
+
+	// One page is deleted, the other becomes a draft.
+	if err := os.Remove(filepath.Join(pagesDir, "gone.md")); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(pagesDir, "secret.md"), "---\ndraft: true\n---\n# Secret\n")
+	run(t, siteDir, "build")
+
+	for _, name := range []string{"gone.html", "secret.html"} {
+		if _, err := os.Stat(filepath.Join(dist, name)); err == nil {
+			t.Errorf("dist/%s is stale and must be removed", name)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(dist, "index.html")); err != nil {
+		t.Error("dist/index.html should still be built")
+	}
+
+	// Pointing -output at the site itself must not wipe the sources.
+	out := runExpectError(t, siteDir, "build", "-output", ".")
+	if !strings.Contains(out, "invalid output directory") {
+		t.Errorf("error should come from the output guard, got: %s", out)
+	}
+	if _, err := os.Stat(filepath.Join(pagesDir, "index.md")); err != nil {
+		t.Error("pages/index.md must survive a refused build")
+	}
+}

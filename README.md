@@ -73,7 +73,7 @@ press serve
 | `press delete section <name>` | Delete a section and all its pages (a folder without `index.md` is not a section and is left alone) |
 | `press rename page <old> <new>` | Rename a page; updates title and `updated_at` in frontmatter |
 | `press rename section <old> <new>` | Rename a section; updates title and `updated_at` in its `index.md` |
-| `press build [-output dir] [--static dir] [--minify]` | Build the site into `dist/` (default); draft pages are skipped; `--minify` strips comments and indentation from the HTML |
+| `press build [-output dir] [--static dir] [--minify]` | Build the site into `dist/` (default), emptying it first so removed or drafted pages don't linger (refuses an output dir that overlaps your sources, or that is non-empty and not press output; see below); draft pages are skipped; `--minify` strips comments and indentation from the HTML |
 | `press build --drafts [-output dir]` | Build including draft pages |
 | `press serve [-port N] [-host addr] [-output dir] [--static dir]` | Build and serve the site locally (listens on 127.0.0.1 by default); rebuilds on file changes |
 | `press serve --host 0.0.0.0` | Expose the dev server to your network (prints a warning) |
@@ -132,6 +132,17 @@ my-site/
 │       └── my-post.md   # Becomes dist/blog/my-post.html
 └── dist/                # Generated output (created by `press build`)
 ```
+
+### The output directory
+
+`press build` empties the output directory before writing, so pages you deleted or turned into drafts don't stay deployed. Because that is a recursive delete, press only does it when it is safe:
+
+- The directory is new, empty, or contains a `.press-output` marker file (written on every build). The marker is a small hidden file; it is harmless to deploy and you can ignore or delete it (the next build recreates it).
+- A `dist/` from an older press version has no marker. It is still accepted if every file in it is a `.html` file or a copy of a file from `pages/` or `static/`.
+- Anything else (for example `-output .git`, `-output docs`, or a folder with your own files) is refused with `refusing to use output directory`, and nothing is deleted. Use an empty or new directory, or clear it yourself.
+- Output that overlaps your sources (the site root, `pages/`, `template.html`, the static dir) is always refused.
+
+If a build fails after the cleaning step (for example a page with broken frontmatter), the output directory can be left partly built; fix the error and build again.
 
 ### Pages and sections
 
