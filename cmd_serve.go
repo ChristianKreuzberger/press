@@ -97,6 +97,7 @@ func runServe(args []string) {
 		fmt.Fprintf(os.Stderr, "build failed: %v\n", err)
 		os.Exit(1)
 	}
+	warnSkippedPages(siteDir)
 	fmt.Printf("built site to %s\n", *outputFlag)
 
 	// Start HTTP file server in the background.
@@ -151,6 +152,7 @@ func runServe(args []string) {
 				if _, err := builder.Build(siteDir, outputDir, *draftsFlag, *staticFlag); err != nil {
 					fmt.Fprintf(os.Stderr, "rebuild failed: %v\n", err)
 				} else {
+					warnSkippedPages(siteDir)
 					fmt.Println("rebuilt successfully")
 				}
 			}

@@ -8,6 +8,7 @@ import (
 
 	"github.com/ChristianKreuzberger/press/internal/builder"
 	"github.com/ChristianKreuzberger/press/internal/minify"
+	"github.com/ChristianKreuzberger/press/internal/page"
 )
 
 func runBuild(args []string) {
@@ -29,6 +30,7 @@ func runBuild(args []string) {
 		fmt.Fprintf(os.Stderr, "build failed: %v\n", err)
 		os.Exit(1)
 	}
+	warnSkippedPages(siteDir)
 	var before, after int64
 	if *minifyFlag {
 		before, after, err = minify.Files(built)
@@ -49,5 +51,18 @@ func runBuild(args []string) {
 	fmt.Printf("✓ Built %d pages in %v → %s/\n", len(built), time.Since(start).Round(time.Millisecond), *outputFlag)
 	if *minifyFlag {
 		fmt.Printf("✓ Minified HTML: %d → %d bytes\n", before, after)
+	}
+}
+
+// warnSkippedPages prints a warning for each file the build ignores. It is not
+// fatal (the site still builds and exits 0), but ignored files must never be silent.
+func warnSkippedPages(siteDir string) {
+	skipped, err := page.Skipped(siteDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warning: could not scan pages/: %v\n", err)
+		return
+	}
+	for _, s := range skipped {
+		fmt.Fprintf(os.Stderr, "warning: skipping pages/%s: %s\n", s.Path, s.Reason)
 	}
 }

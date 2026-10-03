@@ -86,9 +86,9 @@ func TestRenameIndexRejected(t *testing.T) {
 	}
 }
 
-func TestNestedNamesStillWork(t *testing.T) {
+func TestCreateSectionPageAndSectionIndex(t *testing.T) {
 	dir := t.TempDir()
-	if err := Create(dir, "blog/2026/my-post", nil); err != nil {
+	if err := Create(dir, "blog/my-post", nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := Create(dir, "blog/index", nil); err != nil {

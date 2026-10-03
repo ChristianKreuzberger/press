@@ -11,7 +11,14 @@ func TestE2ERenameAndCreateAreSafe(t *testing.T) {
 	siteDir := t.TempDir()
 	run(t, siteDir, "init")
 
-	run(t, siteDir, "create", "page", "blog/2026/post")
+	// Hand-built: create refuses deep names, but legacy deep pages must stay renameable.
+	deepDir := filepath.Join(siteDir, "pages", "blog", "2026")
+	if err := os.MkdirAll(deepDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(deepDir, "post.md"), []byte("---\ntitle: \"X\"\nupdated_at: \"2026-01-01T00:00:00Z\"\n---\nX"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	run(t, siteDir, "create", "page", "other")
 	otherPath := filepath.Join(siteDir, "pages", "other.md")
 	before := readFile(t, otherPath)

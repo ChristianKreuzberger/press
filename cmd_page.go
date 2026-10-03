@@ -35,7 +35,7 @@ func runPageList(args []string) {
 func runPageCreate(args []string) {
 	fs := newFlagSet("create page")
 	fileFlag := fs.String("file", "", "markdown file to use as page content")
-	pos := parseOrExit(fs, args, 1, 1, "press create page <name> [--file <file.md>]\n       name may include sections, e.g. blog/my-post or blog/2026/my-post")
+	pos := parseOrExit(fs, args, 1, 1, "press create page <name> [--file <file.md>]\n       name is page or section/page, e.g. about or blog/my-post")
 	name := pos[0]
 
 	var content []byte

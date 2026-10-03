@@ -34,7 +34,7 @@ func TestCreateDoesNotOverwriteExisting(t *testing.T) {
 func TestCreateFailureLeavesNoEmptyDirs(t *testing.T) {
 	dir := t.TempDir()
 	// An over-long file name makes the write fail after the parents are created.
-	name := "newsec/deeper/" + strings.Repeat("x", 300)
+	name := "newsec/" + strings.Repeat("x", 300)
 	if err := Create(dir, name, []byte("x")); err == nil {
 		t.Fatal("expected error")
 	}
@@ -89,9 +89,7 @@ func TestRenamePreservesMode(t *testing.T) {
 
 func TestRenameCleansEmptyParents(t *testing.T) {
 	dir := t.TempDir()
-	if err := Create(dir, "blog/2026/post", []byte(fm)); err != nil {
-		t.Fatal(err)
-	}
+	writeDeep(t, dir, "blog/2026/post.md", fm)
 	if err := Rename(dir, "blog/2026/post", "top", time.Now()); err != nil {
 		t.Fatal(err)
 	}
@@ -120,13 +118,25 @@ func TestRenameKeepsNonEmptyParents(t *testing.T) {
 
 func TestDeleteCleansEmptyParents(t *testing.T) {
 	dir := t.TempDir()
-	if err := Create(dir, "blog/2026/post", []byte("x")); err != nil {
-		t.Fatal(err)
-	}
+	writeDeep(t, dir, "blog/2026/post.md", "x")
 	if err := Delete(dir, "blog/2026/post"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(filepath.Join(PagesDir(dir), "blog")); err == nil {
 		t.Error("empty parent dirs left after delete")
+	}
+}
+
+// writeDeep hand-builds a file below pages/ because Create now refuses names
+// deeper than section/page, while Rename-from and Delete must still clean up
+// legacy deep files and all their empty parents.
+func writeDeep(t *testing.T, siteDir, rel, content string) {
+	t.Helper()
+	p := filepath.Join(PagesDir(siteDir), filepath.FromSlash(rel))
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
 	}
 }

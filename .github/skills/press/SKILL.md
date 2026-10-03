@@ -69,7 +69,7 @@ press build
 |---------|-------------|
 | `press init [dir] [--theme name]` | Scaffold a new site (`template.html` + `pages/`); choose a built-in theme |
 | `press list page` | List all pages |
-| `press create page <name> [--file f.md]` | Create a page; `name` may include sections (e.g. `blog/my-post`, `blog/2026/my-post`) |
+| `press create page <name> [--file f.md]` | Create a page; `name` is `page` or `section/page` (e.g. `blog/my-post`); deeper nesting is rejected |
 | `press update page <name> --file f.md` | Replace a page's content |
 | `press delete page <name>` | Delete a page |
 | `press list section` | List all sections |

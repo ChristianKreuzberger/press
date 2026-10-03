@@ -89,17 +89,6 @@ func TestCreateInSection(t *testing.T) {
 	}
 }
 
-func TestCreateNestedSections(t *testing.T) {
-	dir := t.TempDir()
-	if err := Create(dir, "blog/2026/my-post", []byte("# My Post\n")); err != nil {
-		t.Fatal(err)
-	}
-	path := filepath.Join(PagesDir(dir), "blog", "2026", "my-post.md")
-	if _, err := os.Stat(path); err != nil {
-		t.Errorf("expected file at %s: %v", path, err)
-	}
-}
-
 func TestCreatePathTraversal(t *testing.T) {
 	dir := t.TempDir()
 	if err := Create(dir, "../../etc/passwd", []byte("evil")); err == nil {
