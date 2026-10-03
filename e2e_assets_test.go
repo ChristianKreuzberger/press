@@ -80,7 +80,7 @@ func TestE2EBuildRemovesStaleOutput(t *testing.T) {
 
 	// Pointing -output at the site itself must not wipe the sources.
 	out := runExpectError(t, siteDir, "build", "-output", ".")
-	if !strings.Contains(out, "refusing to use output directory") {
+	if !strings.Contains(out, "invalid output directory") {
 		t.Errorf("error should come from the output guard, got: %s", out)
 	}
 	if _, err := os.Stat(filepath.Join(pagesDir, "index.md")); err != nil {

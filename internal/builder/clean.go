@@ -20,81 +20,19 @@ var errNotPressOutput = errors.New("not press output")
 // folders made by older press versions, looks like press output).
 const outputMarker = ".press-output"
 
-// contains reports whether child is parent or lives inside it.
-func contains(parent, child string) bool {
-	rel, err := filepath.Rel(parent, child)
-	if err != nil {
-		return false
-	}
-	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)))
-}
-
-// resolve makes p absolute and follows symlinks. For a path that does not
-// exist yet, it resolves the nearest existing ancestor and re-appends the rest,
-// so `link/newdir` with link -> site is still seen as inside the site.
-func resolve(p string) (string, error) {
-	abs, err := filepath.Abs(p)
-	if err != nil {
-		return "", err
-	}
-	existing, rest := abs, ""
-	for {
-		if r, err := filepath.EvalSymlinks(existing); err == nil {
-			return filepath.Join(r, rest), nil
-		}
-		parent := filepath.Dir(existing)
-		if parent == existing {
-			return abs, nil
-		}
-		rest = filepath.Join(filepath.Base(existing), rest)
-		existing = parent
-	}
-}
-
-// checkOutputDir is the whole safety check for a recursive delete of outputDir.
-// It has no side effects, so Build can run it before creating anything. It
-// returns the resolved output path. Two independent guards:
-//  1. guardSources: outputDir must not overlap the site sources.
-//  2. checkOwnership: a non-empty dir must be recognisably press output.
-//
-// Guard 1 duplicates validateOutputDir from PR #83; once that lands, replace
-// guardSources (and contains/resolve) with it plus a template.html check.
+// checkOutputDir decides whether outputDir may be emptied: a non-empty dir must
+// be recognisably press output. Build runs validateOutputDir (source overlap)
+// before this. It has no side effects, so Build can run it before creating
+// anything. It returns the resolved output path.
 func checkOutputDir(siteDir, outputDir, staticDir string) (string, error) {
-	out, err := resolve(outputDir)
+	out, err := resolvePath(outputDir)
 	if err != nil {
 		return "", fmt.Errorf("resolving output dir: %w", err)
-	}
-	if err := guardSources(siteDir, out, outputDir, staticDir); err != nil {
-		return "", err
 	}
 	if err := checkOwnership(siteDir, out, outputDir, staticDir); err != nil {
 		return "", err
 	}
 	return out, nil
-}
-
-func guardSources(siteDir, out, outputDir, staticDir string) error {
-	site, err := resolve(siteDir)
-	if err != nil {
-		return fmt.Errorf("resolving site dir: %w", err)
-	}
-	static, err := validateStaticDirName(staticDir)
-	if err != nil {
-		return err
-	}
-	protected := []string{
-		site,
-		page.PagesDir(site),
-		filepath.Join(site, "template.html"),
-		filepath.Join(site, static),
-	}
-	for _, p := range protected {
-		// Either direction is unsafe: out holds the source, or out is inside it.
-		if contains(out, p) || contains(p, out) && p != site {
-			return fmt.Errorf("%w %s: it overlaps site source %s", errUnsafeOutputDir, outputDir, p)
-		}
-	}
-	return nil
 }
 
 // checkOwnership allows a missing dir, an empty dir, a dir with the marker, or

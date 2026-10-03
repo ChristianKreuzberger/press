@@ -71,29 +71,31 @@ func TestBuildRefusesDangerousOutputDir(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cases := map[string]string{
-		"site dir":              siteDir,
-		"parent dir":            filepath.Dir(siteDir),
-		"pages dir":             filepath.Join(siteDir, "pages"),
-		"static dir":            filepath.Join(siteDir, "static"),
-		"inside pages":          filepath.Join(siteDir, "pages", "out"),
-		"template.html":         filepath.Join(siteDir, "template.html"),
-		".git":                  filepath.Join(siteDir, ".git"),
-		"docs":                  filepath.Join(siteDir, "docs"),
-		"non-empty unrelated":   filepath.Join(siteDir, "unrelated"),
-		"sibling outside site":  sibling,
-		"symlink to unrelated":  linkUnrelated,
-		"symlink to pages":      linkPages,
-		"new dir under symlink": filepath.Join(linkPages, "newdir"),
+	// Source overlaps are caught by validateOutputDir; non-empty dirs that
+	// press did not create are caught by the ownership check.
+	cases := map[string]struct{ out, want string }{
+		"site dir":              {siteDir, "invalid output directory"},
+		"parent dir":            {filepath.Dir(siteDir), "invalid output directory"},
+		"pages dir":             {filepath.Join(siteDir, "pages"), "invalid output directory"},
+		"static dir":            {filepath.Join(siteDir, "static"), "invalid output directory"},
+		"inside pages":          {filepath.Join(siteDir, "pages", "out"), "invalid output directory"},
+		"template.html":         {filepath.Join(siteDir, "template.html"), "invalid output directory"},
+		".git":                  {filepath.Join(siteDir, ".git"), "invalid output directory"},
+		"symlink to pages":      {linkPages, "invalid output directory"},
+		"new dir under symlink": {filepath.Join(linkPages, "newdir"), "invalid output directory"},
+		"docs":                  {filepath.Join(siteDir, "docs"), "refusing to use output directory"},
+		"non-empty unrelated":   {filepath.Join(siteDir, "unrelated"), "refusing to use output directory"},
+		"sibling outside site":  {sibling, "refusing to use output directory"},
+		"symlink to unrelated":  {linkUnrelated, "refusing to use output directory"},
 	}
-	for name, out := range cases {
+	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
-			_, err := Build(siteDir, out, false, "static")
+			_, err := Build(siteDir, c.out, false, "static")
 			if err == nil {
-				t.Fatalf("Build with output %s should fail", out)
+				t.Fatalf("Build with output %s should fail", c.out)
 			}
-			if !strings.Contains(err.Error(), "refusing to use output directory") {
-				t.Errorf("expected the guard to fire, got: %v", err)
+			if !strings.Contains(err.Error(), c.want) {
+				t.Errorf("expected %q, got: %v", c.want, err)
 			}
 		})
 	}
