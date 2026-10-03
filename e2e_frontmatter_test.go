@@ -51,3 +51,50 @@ func TestE2EFrontmatterCRLF(t *testing.T) {
 		t.Errorf("empty frontmatter block must be stripped, got: %s", empty)
 	}
 }
+
+// TestE2EPageTitles checks title resolution: frontmatter title first, then
+// the first H1 outside code fences as plain text, then the file name.
+func TestE2EPageTitles(t *testing.T) {
+	siteDir := t.TempDir()
+	run(t, siteDir, "init")
+	pagesDir := filepath.Join(siteDir, "pages")
+
+	writeFile(t, filepath.Join(pagesDir, "fm.md"),
+		"---\ntitle: \"From Frontmatter\"\n---\nNo heading here.\n")
+	writeFile(t, filepath.Join(pagesDir, "both.md"),
+		"---\ntitle: \"FM Wins\"\n---\n# Heading Loses\n")
+	writeFile(t, filepath.Join(pagesDir, "fence.md"),
+		"```sh\n# not a title\n```\n\n# Real Title\n")
+	writeFile(t, filepath.Join(pagesDir, "rich.md"),
+		"# Post *em* &amp; <b>bold</b>\n")
+	writeFile(t, filepath.Join(pagesDir, "plain.md"), "Just text.\n")
+	writeFile(t, filepath.Join(pagesDir, "emptyfm.md"),
+		"---\ntitle: \"\"\n---\n# H1 Fallback\n")
+	if err := os.MkdirAll(filepath.Join(pagesDir, "docs"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(pagesDir, "docs", "index.md"),
+		"---\ntitle: \"Section FM\"\n---\n# Section Heading\n")
+
+	run(t, siteDir, "build")
+	dist := filepath.Join(siteDir, "dist")
+
+	for file, want := range map[string]string{
+		"fm.html":      "<title>From Frontmatter</title>",
+		"both.html":    "<title>FM Wins</title>",
+		"fence.html":   "<title>Real Title</title>",
+		"rich.html":    "<title>Post em &amp; bold</title>",
+		"plain.html":   "<title>plain</title>",
+		"emptyfm.html": "<title>H1 Fallback</title>",
+	} {
+		if got := readFile(t, filepath.Join(dist, file)); !strings.Contains(got, want) {
+			t.Errorf("%s: want %s in output", file, want)
+		}
+	}
+	// The nav on every page uses the same resolved titles.
+	index := readFile(t, filepath.Join(dist, "index.html"))
+	if !strings.Contains(index, ">From Frontmatter</a>") || !strings.Contains(index, ">Real Title</a>") ||
+		!strings.Contains(index, ">Section FM</a>") || strings.Contains(index, "Section Heading") {
+		t.Errorf("nav must use resolved titles, got: %s", index)
+	}
+}

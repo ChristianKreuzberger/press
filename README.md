@@ -159,7 +159,7 @@ updated_at: "2026-04-22T10:00:00Z"
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `title` | string | Display name used in navigation and the page `<title>` |
+| `title` | string | Display name used in navigation and the page `<title>`. If empty or missing, the first `# ` heading is used, then the file name |
 | `alias` | string | Alternative URL slug (reserved for future use) |
 | `tags` | list | Content tags (reserved for future use) |
 | `weight` | integer | Controls the order of pages and sections in navigation. Lower values appear first. A value of `0` (default) means the item is sorted after all weighted items, in filesystem order. |
