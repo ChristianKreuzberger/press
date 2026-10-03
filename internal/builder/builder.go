@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"html/template"
 	"io"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -214,6 +215,20 @@ type weightedRef struct {
 	weight int
 }
 
+// escapeURLPath percent-encodes each "/"-separated segment of a page or section
+// name for use in an href. Without it "#", "?" and "%" in a name are read as a
+// fragment, query or escape and the link 404s.
+func escapeURLPath(name string) string {
+	segs := strings.Split(name, "/")
+	for i, s := range segs {
+		segs[i] = url.PathEscape(s)
+	}
+	return strings.Join(segs, "/")
+}
+
+// pageURL returns the escaped href for a page's output file.
+func pageURL(name string) string { return escapeURLPath(name) + ".html" }
+
 // buildRootNavRefs assembles the navigation entry list using root-relative URLs.
 // Top-level pages link to "<name>.html"; sections link to "<section>/index.html".
 // Entries are sorted by ascending weight; entries with weight=0 (unset) appear last
@@ -232,7 +247,7 @@ func buildRootNavRefs(pages []page.Page, sections []section.Section, includeDraf
 		weighted = append(weighted, weightedRef{
 			ref: PageRef{
 				Title: resolveTitleFromContent(p.Name, content),
-				URL:   p.Name + ".html",
+				URL:   pageURL(p.Name),
 			},
 			weight: frontmatter.ParseWeight(content),
 		})
@@ -248,7 +263,7 @@ func buildRootNavRefs(pages []page.Page, sections []section.Section, includeDraf
 		weighted = append(weighted, weightedRef{
 			ref: PageRef{
 				Title: resolveTitleFromContent(s.Name, content),
-				URL:   s.Name + "/index.html",
+				URL:   escapeURLPath(s.Name) + "/index.html",
 			},
 			weight: frontmatter.ParseWeight(content),
 		})
@@ -297,7 +312,7 @@ func buildSectionTOC(pages []section.Page, indexContent []byte, includeDrafts bo
 		if err != nil {
 			entries = append(entries, TOCEntry{
 				Title: p.Name,
-				URL:   p.Name + ".html",
+				URL:   pageURL(p.Name),
 			})
 			continue
 		}
@@ -308,7 +323,7 @@ func buildSectionTOC(pages []section.Page, indexContent []byte, includeDrafts bo
 		}
 		entries = append(entries, TOCEntry{
 			Title:     title,
-			URL:       p.Name + ".html",
+			URL:       pageURL(p.Name),
 			CreatedAt: frontmatter.ParseTimeField(content, "created_at"),
 			UpdatedAt: frontmatter.ParseTimeField(content, "updated_at"),
 			Weight:    frontmatter.ParseWeight(content),
