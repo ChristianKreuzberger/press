@@ -1,8 +1,10 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
+	"io/fs"
 	"net"
 	"net/http"
 	"os"
@@ -16,27 +18,47 @@ import (
 	"github.com/ChristianKreuzberger/press/internal/builder"
 )
 
-// collectFileStates walks dir and returns a map of absolute file path to
-// modification time, skipping the excludeDir subtree entirely.
-func collectFileStates(dir, excludeDir string) (map[string]time.Time, error) {
+// collectFileStates returns the modification time of every file that feeds a
+// build: pages/, template.html and the static dir (a name relative to siteDir).
+// Everything else (.git, node_modules, editor swap files, the output dir) is
+// ignored so it cannot trigger rebuilds. Sources that are missing, or vanish
+// while being read (editors replace files on save), are skipped.
+func collectFileStates(siteDir, staticDir string) (map[string]time.Time, error) {
 	states := make(map[string]time.Time)
-	err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() && path == excludeDir {
-			return filepath.SkipDir
-		}
-		if !d.IsDir() {
+
+	for _, root := range []string{filepath.Join(siteDir, "pages"), filepath.Join(siteDir, staticDir)} {
+		err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+			if errors.Is(err, fs.ErrNotExist) {
+				return nil
+			}
+			if err != nil {
+				return err
+			}
+			if d.IsDir() {
+				return nil
+			}
 			info, err := d.Info()
+			if errors.Is(err, fs.ErrNotExist) {
+				return nil
+			}
 			if err != nil {
 				return err
 			}
 			states[path] = info.ModTime()
+			return nil
+		})
+		if err != nil {
+			return nil, err
 		}
-		return nil
-	})
-	return states, err
+	}
+
+	tmplPath := filepath.Join(siteDir, "template.html")
+	if info, err := os.Stat(tmplPath); err == nil {
+		states[tmplPath] = info.ModTime()
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		return nil, err
+	}
+	return states, nil
 }
 
 // hasChanged reports whether the file state has changed between two snapshots.
@@ -122,7 +144,7 @@ func runServe(args []string) {
 	fmt.Printf("serving at http://%s — watching for changes (Ctrl+C to stop)\n", addr)
 
 	// Capture initial file state.
-	prev, err := collectFileStates(siteDir, outputDir)
+	prev, err := collectFileStates(siteDir, *staticFlag)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error reading file states: %v\n", err)
 		os.Exit(1)
@@ -141,7 +163,7 @@ func runServe(args []string) {
 			fmt.Println("\nstopping server")
 			return
 		case <-ticker.C:
-			curr, err := collectFileStates(siteDir, outputDir)
+			curr, err := collectFileStates(siteDir, *staticFlag)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "error reading file states: %v\n", err)
 				continue
