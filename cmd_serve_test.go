@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -115,51 +114,6 @@ func TestCollectFileStates_MissingSourcesAreNotAnError(t *testing.T) {
 	}
 	if len(states) != 0 {
 		t.Errorf("expected 0 states, got %d", len(states))
-	}
-}
-
-func TestNextSnapshot_UnchangedSkipsBuild(t *testing.T) {
-	ts := time.Now()
-	prev := map[string]time.Time{"a": ts}
-	curr := map[string]time.Time{"a": ts}
-
-	next, built, err := nextSnapshot(prev, curr, func() error {
-		t.Error("build must not run when nothing changed")
-		return nil
-	})
-	if err != nil || built {
-		t.Errorf("got built=%v err=%v, want false, nil", built, err)
-	}
-	if hasChanged(next, curr) {
-		t.Error("snapshot should stay current")
-	}
-}
-
-func TestNextSnapshot_SuccessAdvancesSnapshot(t *testing.T) {
-	ts := time.Now()
-	prev := map[string]time.Time{"a": ts}
-	curr := map[string]time.Time{"a": ts.Add(time.Second)}
-
-	next, built, err := nextSnapshot(prev, curr, func() error { return nil })
-	if err != nil || !built {
-		t.Fatalf("got built=%v err=%v, want true, nil", built, err)
-	}
-	if hasChanged(next, curr) {
-		t.Error("snapshot should advance to curr after a successful build")
-	}
-}
-
-func TestNextSnapshot_FailureKeepsOldSnapshotSoItIsRetried(t *testing.T) {
-	ts := time.Now()
-	prev := map[string]time.Time{"a": ts}
-	curr := map[string]time.Time{"a": ts.Add(time.Second)}
-
-	next, built, err := nextSnapshot(prev, curr, func() error { return errors.New("boom") })
-	if err == nil || built {
-		t.Fatalf("got built=%v err=%v, want false, error", built, err)
-	}
-	if !hasChanged(next, curr) {
-		t.Error("snapshot must not advance after a failed build, otherwise it is never retried")
 	}
 }
 

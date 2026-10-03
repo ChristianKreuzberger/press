@@ -61,19 +61,6 @@ func collectFileStates(siteDir, staticDir string) (map[string]time.Time, error) 
 	return states, nil
 }
 
-// nextSnapshot rebuilds when curr differs from prev and returns the snapshot to
-// compare against on the next tick. After a failed build it keeps prev, so the
-// build is retried on the next tick instead of waiting for another edit.
-func nextSnapshot(prev, curr map[string]time.Time, build func() error) (next map[string]time.Time, built bool, err error) {
-	if !hasChanged(prev, curr) {
-		return prev, false, nil
-	}
-	if err := build(); err != nil {
-		return prev, false, err
-	}
-	return curr, true, nil
-}
-
 // hasChanged reports whether the file state has changed between two snapshots.
 // It returns true when a file is added, removed, or modified.
 func hasChanged(prev, curr map[string]time.Time) bool {
@@ -167,7 +154,6 @@ func runServe(args []string) {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 
-	var lastFailure string
 	ticker := time.NewTicker(*intervalFlag)
 	defer ticker.Stop()
 
@@ -182,25 +168,15 @@ func runServe(args []string) {
 				fmt.Fprintf(os.Stderr, "error reading file states: %v\n", err)
 				continue
 			}
-			if lastFailure == "" && hasChanged(prev, curr) {
+			if hasChanged(prev, curr) {
+				prev = curr
 				fmt.Println("change detected — rebuilding...")
-			}
-			next, built, err := nextSnapshot(prev, curr, func() error {
-				_, err := builder.Build(siteDir, outputDir, *draftsFlag, *staticFlag)
-				return err
-			})
-			prev = next
-			switch {
-			case err != nil:
-				// The build is retried every tick; report a given failure only once.
-				if err.Error() != lastFailure {
-					fmt.Fprintf(os.Stderr, "rebuild failed: %v (will retry)\n", err)
-					lastFailure = err.Error()
+				if _, err := builder.Build(siteDir, outputDir, *draftsFlag, *staticFlag); err != nil {
+					fmt.Fprintf(os.Stderr, "rebuild failed: %v\n", err)
+				} else {
+					warnSkippedPages(siteDir)
+					fmt.Println("rebuilt successfully")
 				}
-			case built:
-				lastFailure = ""
-				warnSkippedPages(siteDir)
-				fmt.Println("rebuilt successfully")
 			}
 		}
 	}
