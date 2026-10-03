@@ -1,8 +1,10 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
+	"io/fs"
 	"net"
 	"net/http"
 	"os"
@@ -16,27 +18,60 @@ import (
 	"github.com/ChristianKreuzberger/press/internal/builder"
 )
 
-// collectFileStates walks dir and returns a map of absolute file path to
-// modification time, skipping the excludeDir subtree entirely.
-func collectFileStates(dir, excludeDir string) (map[string]time.Time, error) {
+// collectFileStates returns the modification time of every file that feeds a
+// build: pages/, template.html and the static dir (a name relative to siteDir).
+// Everything else (.git, node_modules, editor swap files, the output dir) is
+// ignored so it cannot trigger rebuilds. Sources that are missing, or vanish
+// while being read (editors replace files on save), are skipped.
+func collectFileStates(siteDir, staticDir string) (map[string]time.Time, error) {
 	states := make(map[string]time.Time)
-	err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() && path == excludeDir {
-			return filepath.SkipDir
-		}
-		if !d.IsDir() {
+
+	for _, root := range []string{filepath.Join(siteDir, "pages"), filepath.Join(siteDir, staticDir)} {
+		err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+			if errors.Is(err, fs.ErrNotExist) {
+				return nil
+			}
+			if err != nil {
+				return err
+			}
+			if d.IsDir() {
+				return nil
+			}
 			info, err := d.Info()
+			if errors.Is(err, fs.ErrNotExist) {
+				return nil
+			}
 			if err != nil {
 				return err
 			}
 			states[path] = info.ModTime()
+			return nil
+		})
+		if err != nil {
+			return nil, err
 		}
-		return nil
-	})
-	return states, err
+	}
+
+	tmplPath := filepath.Join(siteDir, "template.html")
+	if info, err := os.Stat(tmplPath); err == nil {
+		states[tmplPath] = info.ModTime()
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		return nil, err
+	}
+	return states, nil
+}
+
+// nextSnapshot rebuilds when curr differs from prev and returns the snapshot to
+// compare against on the next tick. After a failed build it keeps prev, so the
+// build is retried on the next tick instead of waiting for another edit.
+func nextSnapshot(prev, curr map[string]time.Time, build func() error) (next map[string]time.Time, built bool, err error) {
+	if !hasChanged(prev, curr) {
+		return prev, false, nil
+	}
+	if err := build(); err != nil {
+		return prev, false, err
+	}
+	return curr, true, nil
 }
 
 // hasChanged reports whether the file state has changed between two snapshots.
@@ -122,7 +157,7 @@ func runServe(args []string) {
 	fmt.Printf("serving at http://%s — watching for changes (Ctrl+C to stop)\n", addr)
 
 	// Capture initial file state.
-	prev, err := collectFileStates(siteDir, outputDir)
+	prev, err := collectFileStates(siteDir, *staticFlag)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error reading file states: %v\n", err)
 		os.Exit(1)
@@ -132,6 +167,7 @@ func runServe(args []string) {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 
+	var lastFailure string
 	ticker := time.NewTicker(*intervalFlag)
 	defer ticker.Stop()
 
@@ -141,20 +177,30 @@ func runServe(args []string) {
 			fmt.Println("\nstopping server")
 			return
 		case <-ticker.C:
-			curr, err := collectFileStates(siteDir, outputDir)
+			curr, err := collectFileStates(siteDir, *staticFlag)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "error reading file states: %v\n", err)
 				continue
 			}
-			if hasChanged(prev, curr) {
-				prev = curr
+			if lastFailure == "" && hasChanged(prev, curr) {
 				fmt.Println("change detected — rebuilding...")
-				if _, err := builder.Build(siteDir, outputDir, *draftsFlag, *staticFlag); err != nil {
-					fmt.Fprintf(os.Stderr, "rebuild failed: %v\n", err)
-				} else {
-					warnSkippedPages(siteDir)
-					fmt.Println("rebuilt successfully")
+			}
+			next, built, err := nextSnapshot(prev, curr, func() error {
+				_, err := builder.Build(siteDir, outputDir, *draftsFlag, *staticFlag)
+				return err
+			})
+			prev = next
+			switch {
+			case err != nil:
+				// The build is retried every tick; report a given failure only once.
+				if err.Error() != lastFailure {
+					fmt.Fprintf(os.Stderr, "rebuild failed: %v (will retry)\n", err)
+					lastFailure = err.Error()
 				}
+			case built:
+				lastFailure = ""
+				warnSkippedPages(siteDir)
+				fmt.Println("rebuilt successfully")
 			}
 		}
 	}

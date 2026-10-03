@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -62,61 +63,103 @@ func TestIsLoopbackHost(t *testing.T) {
 	}
 }
 
-func TestCollectFileStates_ReturnsFiles(t *testing.T) {
-	dir := t.TempDir()
-
-	if err := os.WriteFile(filepath.Join(dir, "a.md"), []byte("hello"), 0644); err != nil {
+func writeTestFile(t *testing.T, path, content string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "b.md"), []byte("world"), 0644); err != nil {
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
 		t.Fatal(err)
-	}
-
-	states, err := collectFileStates(dir, "")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if len(states) != 2 {
-		t.Errorf("expected 2 states, got %d", len(states))
 	}
 }
 
-func TestCollectFileStates_ExcludesOutputDir(t *testing.T) {
+func TestCollectFileStates_WatchesOnlySources(t *testing.T) {
 	dir := t.TempDir()
-	distDir := filepath.Join(dir, "dist")
-	if err := os.Mkdir(distDir, 0755); err != nil {
-		t.Fatal(err)
-	}
+	writeTestFile(t, filepath.Join(dir, "pages", "index.md"), "# Home")
+	writeTestFile(t, filepath.Join(dir, "pages", "blog", "post.md"), "# Post")
+	writeTestFile(t, filepath.Join(dir, "template.html"), "<html>")
+	writeTestFile(t, filepath.Join(dir, "static", "css", "site.css"), "body{}")
+	// None of these may trigger a rebuild.
+	writeTestFile(t, filepath.Join(dir, "dist", "index.html"), "<html>")
+	writeTestFile(t, filepath.Join(dir, ".git", "index"), "x")
+	writeTestFile(t, filepath.Join(dir, "node_modules", "pkg", "a.js"), "x")
+	writeTestFile(t, filepath.Join(dir, "notes.txt"), "x")
 
-	if err := os.WriteFile(filepath.Join(dir, "index.md"), []byte("# Home"), 0644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(distDir, "index.html"), []byte("<html>"), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	states, err := collectFileStates(dir, distDir)
+	states, err := collectFileStates(dir, "static")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if _, ok := states[filepath.Join(distDir, "index.html")]; ok {
-		t.Error("file inside excluded dir should not appear in states")
+	want := []string{
+		filepath.Join(dir, "pages", "index.md"),
+		filepath.Join(dir, "pages", "blog", "post.md"),
+		filepath.Join(dir, "template.html"),
+		filepath.Join(dir, "static", "css", "site.css"),
 	}
-	if _, ok := states[filepath.Join(dir, "index.md")]; !ok {
-		t.Error("source file should appear in states")
+	if len(states) != len(want) {
+		t.Errorf("expected %d watched files, got %d: %v", len(want), len(states), states)
+	}
+	for _, w := range want {
+		if _, ok := states[w]; !ok {
+			t.Errorf("expected %s to be watched", w)
+		}
 	}
 }
 
-func TestCollectFileStates_EmptyDir(t *testing.T) {
+func TestCollectFileStates_MissingSourcesAreNotAnError(t *testing.T) {
 	dir := t.TempDir()
 
-	states, err := collectFileStates(dir, "")
+	states, err := collectFileStates(dir, "static")
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		t.Fatalf("missing pages/, template.html and static dir must not be an error: %v", err)
 	}
 	if len(states) != 0 {
-		t.Errorf("expected 0 states for empty dir, got %d", len(states))
+		t.Errorf("expected 0 states, got %d", len(states))
+	}
+}
+
+func TestNextSnapshot_UnchangedSkipsBuild(t *testing.T) {
+	ts := time.Now()
+	prev := map[string]time.Time{"a": ts}
+	curr := map[string]time.Time{"a": ts}
+
+	next, built, err := nextSnapshot(prev, curr, func() error {
+		t.Error("build must not run when nothing changed")
+		return nil
+	})
+	if err != nil || built {
+		t.Errorf("got built=%v err=%v, want false, nil", built, err)
+	}
+	if hasChanged(next, curr) {
+		t.Error("snapshot should stay current")
+	}
+}
+
+func TestNextSnapshot_SuccessAdvancesSnapshot(t *testing.T) {
+	ts := time.Now()
+	prev := map[string]time.Time{"a": ts}
+	curr := map[string]time.Time{"a": ts.Add(time.Second)}
+
+	next, built, err := nextSnapshot(prev, curr, func() error { return nil })
+	if err != nil || !built {
+		t.Fatalf("got built=%v err=%v, want true, nil", built, err)
+	}
+	if hasChanged(next, curr) {
+		t.Error("snapshot should advance to curr after a successful build")
+	}
+}
+
+func TestNextSnapshot_FailureKeepsOldSnapshotSoItIsRetried(t *testing.T) {
+	ts := time.Now()
+	prev := map[string]time.Time{"a": ts}
+	curr := map[string]time.Time{"a": ts.Add(time.Second)}
+
+	next, built, err := nextSnapshot(prev, curr, func() error { return errors.New("boom") })
+	if err == nil || built {
+		t.Fatalf("got built=%v err=%v, want false, error", built, err)
+	}
+	if !hasChanged(next, curr) {
+		t.Error("snapshot must not advance after a failed build, otherwise it is never retried")
 	}
 }
 
