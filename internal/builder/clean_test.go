@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -386,4 +387,31 @@ func TestBuildRefusedDirLeavesNoStaging(t *testing.T) {
 		t.Errorf("refused build created staging dirs: %v", left)
 	}
 	assertExists(t, filepath.Join(outDir, "keep.txt"))
+}
+
+// If removing the replaced output fails halfway, what is left must be marked, or
+// every later build would refuse it. The first build after upgrading replaces an
+// unmarked legacy dist/, so that is the case that matters.
+func TestBuildLeavesMarkedLeftoverWhenCleanupFails(t *testing.T) {
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("needs a non-root POSIX user to make a directory undeletable")
+	}
+	siteDir, outDir := newAssetSite(t)
+	writeTestFile(t, filepath.Join(outDir, "index.html"), "<html>")
+	locked := filepath.Join(outDir, "blog")
+	writeTestFile(t, filepath.Join(locked, "post.html"), "<html>")
+	if err := os.Chmod(locked, 0500); err != nil {
+		t.Fatal(err)
+	}
+	leftover := previousPath(outDir)
+	t.Cleanup(func() { _ = os.Chmod(filepath.Join(leftover, "blog"), 0755) })
+
+	if _, err := Build(siteDir, outDir, false, "static"); err != nil {
+		t.Fatalf("legacy dist should still build: %v", err)
+	}
+	assertExists(t, filepath.Join(outDir, "index.html"))
+	if _, err := os.Stat(leftover); err != nil {
+		t.Skip("cleanup succeeded, nothing left to check")
+	}
+	assertExists(t, filepath.Join(leftover, outputMarker))
 }

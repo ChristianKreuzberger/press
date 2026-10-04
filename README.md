@@ -144,7 +144,7 @@ my-site/
 
 The site is built into a hidden sibling folder (`.dist.press-new` for `dist/`) and swapped in only when the whole build succeeded. If a build fails (for example a template error), the previous output is left untouched, and `press serve` keeps serving it. `serve` never shows a half-built page; a request that lands during the swap itself can get a brief 404.
 
-If press is killed mid-build, a hidden `.dist.press-new` or `.dist.press-old` folder may remain; the next build removes it, and you can delete it yourself. You may want `.*.press-*` in your `.gitignore`. The output directory needs a writable parent folder, and cannot be a mount point (for example a Docker volume): the swap fails with an error and the previous output stays in place. On Windows the swap also fails while another program holds files in the output directory open.
+If press is killed mid-build, a hidden `.dist.press-new` or `.dist.press-old` folder may remain; the next build removes it, and you can delete it yourself. You may want `.*.press-*` in your `.gitignore`. Don't run two builds of the same output directory at the same time (for example `press build` while `press serve` is rebuilding); they share the staging folder and can break each other. The output directory needs a writable parent folder, and cannot be a mount point (for example a Docker volume): the swap fails with an error and the previous output stays in place. On Windows the swap also fails while another program holds files in the output directory open.
 
 ### Pages and sections
 
