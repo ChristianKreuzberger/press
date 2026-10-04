@@ -1,9 +1,14 @@
 package builder
 
 import (
+	"errors"
+	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/ChristianKreuzberger/press/internal/page"
@@ -183,4 +188,230 @@ func TestBuildBadTemplateKeepsExistingOutput(t *testing.T) {
 		t.Fatal("expected template parse error")
 	}
 	assertExists(t, filepath.Join(outDir, "index.html"))
+}
+
+// stagingLeftovers lists hidden press-new/press-old siblings of out.
+func stagingLeftovers(t *testing.T, out string) []string {
+	t.Helper()
+	matches, err := filepath.Glob(filepath.Join(filepath.Dir(out), "."+filepath.Base(out)+".press-*"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return matches
+}
+
+// A build that fails while rendering must not touch the previous output.
+func TestBuildFailureKeepsPreviousOutput(t *testing.T) {
+	siteDir, outDir := newAssetSite(t)
+	if err := page.Create(siteDir, "old", []byte("# Old\n")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Build(siteDir, outDir, false, "static"); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.ReadFile(filepath.Join(outDir, "index.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Parses fine, fails when a page is rendered (after the old code had cleaned).
+	writeTestFile(t, filepath.Join(siteDir, "template.html"), `{{ template "missing" . }}`)
+	if err := os.Remove(filepath.Join(siteDir, "pages", "old.md")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Build(siteDir, outDir, false, "static"); err == nil {
+		t.Fatal("expected a render error")
+	}
+
+	after, err := os.ReadFile(filepath.Join(outDir, "index.html"))
+	if err != nil {
+		t.Fatalf("previous index.html must survive a failed build: %v", err)
+	}
+	if string(after) != string(before) {
+		t.Error("previous index.html was modified by a failed build")
+	}
+	assertExists(t, filepath.Join(outDir, "old.html"))
+	assertExists(t, filepath.Join(outDir, outputMarker))
+	if left := stagingLeftovers(t, outDir); len(left) != 0 {
+		t.Errorf("failed build left staging dirs behind: %v", left)
+	}
+}
+
+// While a rebuild runs, a reader must never see an empty or truncated page.
+// A brief "not found" while the new dir is swapped in is accepted (see swapOutput).
+func TestBuildNeverShowsPartialOutput(t *testing.T) {
+	siteDir, outDir := newAssetSite(t)
+	for i := 0; i < 6; i++ {
+		body := strings.Repeat("A paragraph of text.\n\n", 5000)
+		if err := page.Create(siteDir, fmt.Sprintf("big%d", i), []byte("# Big\n\n"+body)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := Build(siteDir, outDir, false, "static"); err != nil {
+		t.Fatal(err)
+	}
+	want, err := os.ReadFile(filepath.Join(outDir, "big0.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	stop := make(chan struct{})
+	bad := make(chan string, 1)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			got, err := os.ReadFile(filepath.Join(outDir, "big0.html"))
+			if errors.Is(err, fs.ErrNotExist) {
+				continue
+			}
+			if err != nil || string(got) != string(want) {
+				select {
+				case bad <- fmt.Sprintf("read err=%v len=%d want len=%d", err, len(got), len(want)):
+				default:
+				}
+				return
+			}
+		}
+	}()
+	for i := 0; i < 8; i++ {
+		if _, err := Build(siteDir, outDir, false, "static"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	close(stop)
+	wg.Wait()
+	select {
+	case msg := <-bad:
+		t.Fatalf("reader saw a partial page: %s", msg)
+	default:
+	}
+}
+
+func TestBuildReturnsFinalPaths(t *testing.T) {
+	siteDir, outDir := newAssetSite(t)
+	if err := page.Create(siteDir, "about", []byte("# About\n")); err != nil {
+		t.Fatal(err)
+	}
+	built, err := Build(siteDir, outDir, false, "static")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(built) == 0 {
+		t.Fatal("expected built paths")
+	}
+	for _, p := range built {
+		if !strings.HasPrefix(p, outDir+string(filepath.Separator)) {
+			t.Errorf("%s is not under the real output dir %s", p, outDir)
+		}
+		assertExists(t, p)
+	}
+}
+
+func TestBuildRemovesStaleStaging(t *testing.T) {
+	siteDir, outDir := newAssetSite(t)
+	stale := filepath.Join(siteDir, ".dist.press-new")
+	staleOld := filepath.Join(siteDir, ".dist.press-old")
+	for _, d := range []string{stale, staleOld} {
+		writeTestFile(t, filepath.Join(d, "junk.txt"), "x")
+		writeTestFile(t, filepath.Join(d, outputMarker), "x")
+	}
+
+	if _, err := Build(siteDir, outDir, false, "static"); err != nil {
+		t.Fatal(err)
+	}
+	for _, d := range []string{stale, staleOld} {
+		if _, err := os.Stat(d); err == nil {
+			t.Errorf("leftover %s from a crashed build should be removed", filepath.Base(d))
+		}
+	}
+	assertExists(t, filepath.Join(outDir, "index.html"))
+}
+
+// A dir that merely has our reserved name, but is not press output, is never deleted.
+func TestBuildRefusesUnownedStagingPath(t *testing.T) {
+	for _, name := range []string{".dist.press-new", ".dist.press-old"} {
+		t.Run(name, func(t *testing.T) {
+			siteDir, outDir := newAssetSite(t)
+			if _, err := Build(siteDir, outDir, false, "static"); err != nil {
+				t.Fatal(err)
+			}
+			mine := filepath.Join(siteDir, name, "mine.txt")
+			writeTestFile(t, mine, "x")
+
+			err := func() error { _, err := Build(siteDir, outDir, false, "static"); return err }()
+			if err == nil || !strings.Contains(err.Error(), name) {
+				t.Fatalf("expected an error naming %s, got %v", name, err)
+			}
+			assertExists(t, mine)
+			assertExists(t, filepath.Join(outDir, "index.html"))
+		})
+	}
+}
+
+func TestBuildSymlinkedOutputStaysSymlink(t *testing.T) {
+	siteDir, _ := newAssetSite(t)
+	target := filepath.Join(t.TempDir(), "real-dist")
+	link := filepath.Join(siteDir, "dist")
+	if err := os.MkdirAll(target, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	for i := 0; i < 2; i++ {
+		if _, err := Build(siteDir, link, false, "static"); err != nil {
+			t.Fatalf("build %d: %v", i+1, err)
+		}
+	}
+	fi, err := os.Lstat(link)
+	if err != nil || fi.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("output must stay a symlink, got %v err=%v", fi, err)
+	}
+	assertExists(t, filepath.Join(target, "index.html"))
+}
+
+func TestBuildRefusedDirLeavesNoStaging(t *testing.T) {
+	siteDir, outDir := newAssetSite(t)
+	writeTestFile(t, filepath.Join(outDir, "keep.txt"), "mine")
+	if _, err := Build(siteDir, outDir, false, "static"); err == nil {
+		t.Fatal("expected refusal")
+	}
+	if left := stagingLeftovers(t, outDir); len(left) != 0 {
+		t.Errorf("refused build created staging dirs: %v", left)
+	}
+	assertExists(t, filepath.Join(outDir, "keep.txt"))
+}
+
+// If removing the replaced output fails halfway, what is left must be marked, or
+// every later build would refuse it. The first build after upgrading replaces an
+// unmarked legacy dist/, so that is the case that matters.
+func TestBuildLeavesMarkedLeftoverWhenCleanupFails(t *testing.T) {
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("needs a non-root POSIX user to make a directory undeletable")
+	}
+	siteDir, outDir := newAssetSite(t)
+	writeTestFile(t, filepath.Join(outDir, "index.html"), "<html>")
+	locked := filepath.Join(outDir, "blog")
+	writeTestFile(t, filepath.Join(locked, "post.html"), "<html>")
+	if err := os.Chmod(locked, 0500); err != nil {
+		t.Fatal(err)
+	}
+	leftover := previousPath(outDir)
+	t.Cleanup(func() { _ = os.Chmod(filepath.Join(leftover, "blog"), 0755) })
+
+	if _, err := Build(siteDir, outDir, false, "static"); err != nil {
+		t.Fatalf("legacy dist should still build: %v", err)
+	}
+	assertExists(t, filepath.Join(outDir, "index.html"))
+	if _, err := os.Stat(leftover); err != nil {
+		t.Skip("cleanup succeeded, nothing left to check")
+	}
+	assertExists(t, filepath.Join(leftover, outputMarker))
 }

@@ -62,8 +62,9 @@ type TemplateData struct {
 // staticDir names a directory relative to siteDir whose files are copied into
 // outputDir while preserving directory structure; if it does not exist it is
 // silently skipped.
-// outputDir is emptied first so stale files from removed or drafted pages do not
-// survive. Build refuses an outputDir that overlaps the site sources, or that is
+// The site is built in a hidden sibling dir and swapped in only on success, so
+// stale files from removed or drafted pages do not survive and a failed build
+// leaves the previous output untouched. Build refuses an outputDir that overlaps the site sources, or that is
 // non-empty and not recognisable as press output (see checkOutputDir).
 // It returns the list of absolute paths of HTML files that were written.
 func Build(siteDir, outputDir string, includeDrafts bool, staticDir string) ([]string, error) {
@@ -107,35 +108,46 @@ func Build(siteDir, outputDir string, includeDrafts bool, staticDir string) ([]s
 		return nil, fmt.Errorf("building nav refs: %w", err)
 	}
 
-	if err := os.MkdirAll(outputDir, 0755); err != nil { //nolint:gosec // generated site output must be world-readable for web servers
-		return nil, fmt.Errorf("creating output directory: %w", err)
-	}
-
-	// Clean after the template and nav checks, so a bad template keeps the
-	// previous output. Failures while rendering pages, copying assets or building
-	// sections happen after this point and can still leave a partly built dir.
-	if err := cleanOutputDir(resolvedOut); err != nil {
+	// Build into a hidden sibling dir and swap it in only once everything has
+	// been written, so a failed build leaves the previous output untouched and
+	// `press serve` never serves a half-built site.
+	staging, err := prepareStaging(resolvedOut)
+	if err != nil {
 		return nil, err
 	}
+	defer func() { _ = os.RemoveAll(staging) }() // no-op after a successful swap
 
 	var built []string
 
-	topLevelPaths, err := buildTopLevelPages(pages, outputDir, rootNavRefs, tmpl, includeDrafts)
+	topLevelPaths, err := buildTopLevelPages(pages, staging, rootNavRefs, tmpl, includeDrafts)
 	if err != nil {
 		return nil, err
 	}
 	built = append(built, topLevelPaths...)
 
-	if err := copyAssets(siteDir, outputDir, staticDir); err != nil {
+	if err := copyAssets(siteDir, staging, staticDir); err != nil {
 		return nil, err
 	}
 
-	sectionPaths, err := buildSections(sections, siteDir, outputDir, rootNavRefs, tmpl, includeDrafts)
+	sectionPaths, err := buildSections(sections, siteDir, staging, rootNavRefs, tmpl, includeDrafts)
 	if err != nil {
 		return nil, err
 	}
 	built = append(built, sectionPaths...)
 
+	if err := swapOutput(staging, resolvedOut); err != nil {
+		return nil, err
+	}
+
+	// The paths were written under staging; callers (minify, --verbose) need the
+	// final ones.
+	for i, p := range built {
+		rel, err := filepath.Rel(staging, p)
+		if err != nil {
+			return nil, fmt.Errorf("resolving built path %s: %w", p, err)
+		}
+		built[i] = filepath.Join(outputDir, rel)
+	}
 	return built, nil
 }
 
