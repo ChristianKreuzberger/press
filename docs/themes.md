@@ -80,7 +80,7 @@ Save this as `template.html` in your site root and run `press build`.
 ## Creating your own theme
 
 1. **Copy the minimal example** above into `template.html`.
-2. **Add your own CSS.** You can inline styles in a `<style>` block, load a stylesheet from a CDN, or reference a local CSS file in your `dist/` folder (place static assets there manually or via a build step).
+2. **Add your own CSS.** You can inline styles in a `<style>` block, load a stylesheet from a CDN, or reference a local CSS file. Put it in `static/` (for example `static/style.css`, linked as `/static/style.css`): press copies that folder into the output on every build, while `dist/` is replaced and manual changes there are lost.
 3. **Use the template variables** listed above to inject the page title, content, and navigation.
 4. **Rebuild** with `press build` (or `press serve` for live reload) after each change.
 
@@ -89,7 +89,7 @@ Save this as `template.html` in your site root and run `press build`.
 - **CSS variables** make it easy to define a palette once and reuse it everywhere. See the built-in themes in [`internal/themes/themes.go`](../internal/themes/themes.go) for examples.
 - **Navigation order** is controlled by the `weight` frontmatter field on pages and sections — you don't need to touch the template to reorder links.
 - **Section table of contents** — the `.TableOfContents` list is only populated on section index pages (`pages/<section>/index.md`). Guard it with `{{if .TableOfContents}}` as shown above.
-- **External fonts** — load them from a CDN or self-host them in `dist/fonts/`.
+- **External fonts** — load them from a CDN or self-host them in `static/fonts/`.
 
 ### Sharing themes
 

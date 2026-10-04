@@ -71,20 +71,22 @@ press serve
 | `press create section <name> [--file f.md]` | Create a new section (folder + `index.md`) |
 | `press update section <name> --file f.md` | Replace a section's index content |
 | `press delete section <name>` | Delete a section and all its pages (a folder without `index.md` is not a section and is left alone) |
-| `press rename page <old> <new>` | Rename a page; updates title and `updated_at` in frontmatter |
-| `press rename section <old> <new>` | Rename a section; updates title and `updated_at` in its `index.md` |
-| `press build [-output dir] [--static dir] [--minify]` | Build the site into `dist/` (default), replacing it only if the build succeeds so removed or drafted pages don't linger (refuses an output dir that overlaps your sources, or that is non-empty and not press output; see below); draft pages are skipped; `--minify` strips comments and indentation from the HTML |
-| `press build --drafts [-output dir]` | Build including draft pages |
-| `press serve [-port N] [-host addr] [-output dir] [--static dir]` | Build and serve the site locally (listens on 127.0.0.1 by default); rebuilds on file changes |
+| `press rename page <old> <new>` | Rename a page; sets `updated_at` (adding it, or a frontmatter block, if missing) and re-derives the title from the new name unless you wrote one by hand; Markdown links to it in other pages are rewritten |
+| `press rename section <old> <new>` | Same for a section's `index.md`; links to the section and its pages are rewritten |
+| `press build [--output dir] [--static dir] [--minify] [--verbose]` | Build the site into `dist/` (default), replacing it only if the build succeeds so removed or drafted pages don't linger (refuses an output dir that overlaps your sources, or that is non-empty and not press output; see below); draft pages are skipped; `--minify` strips comments and indentation from the HTML; `--verbose` prints each built page |
+| `press build --drafts [--output dir]` | Build including draft pages |
+| `press serve [--port N] [--host addr] [--output dir] [--static dir] [--interval d]` | Build and serve the site locally (listens on 127.0.0.1:8080 by default); rebuilds on file changes, checked every `--interval` (default `1s`) |
 | `press serve --host 0.0.0.0` | Expose the dev server to your network (prints a warning) |
 | `press serve --drafts` | Serve including draft pages |
 | `press tree` | Show a tree of all pages and sections; draft pages are marked `[draft]` |
-| `press check` | Validate pages and internal links; exits with code 1 if issues are found |
-| `press --version` | Print the installed version |
+| `press check` | Validate pages and internal links (absolute, relative and `<a href>`); links to draft pages count as broken; exits with code 1 if issues are found |
+| `press --version` | Print the installed version (a global flag: it goes before the command; `press build --version` is an error) |
 
 The output directory must be separate from the site: `press build` and `press serve` refuse an `--output` that equals or contains the site directory, `pages/`, the static directory, `template.html` or `.git`, or lies inside any of them except the site directory itself. `--output` is relative to the site directory.
 
-Run any command with `--help` for detailed usage.
+Flags may be written with one or two dashes (`-output` and `--output` are the same). Run any command with `--help` for detailed usage.
+
+`press rename` only rewrites Markdown inline links such as `[text](/old)`, `/old.html`, `/old#part` and, for sections, `/old/...`. Raw `<a href>` tags, images, relative links and links inside code are left alone; run `press check` afterwards to find what is left.
 
 Exit codes: `0` success, `1` runtime error (including `check` finding issues), `2` usage error (bad flags or arguments).
 
@@ -130,6 +132,7 @@ my-site/
 │   └── blog/            # A section (group of related pages)
 │       ├── index.md     # Becomes dist/blog/index.html (section landing page)
 │       └── my-post.md   # Becomes dist/blog/my-post.html
+├── static/              # Optional: copied as-is to dist/static/ (static/logo.png -> dist/static/logo.png)
 └── dist/                # Generated output (created by `press build`)
 ```
 
@@ -145,6 +148,10 @@ my-site/
 The site is built into a hidden sibling folder (`.dist.press-new` for `dist/`) and swapped in only when the whole build succeeded. If a build fails (for example a template error), the previous output is left untouched, and `press serve` keeps serving it. `serve` never shows a half-built page; a request that lands during the swap itself can get a brief 404.
 
 If press is killed mid-build, a hidden `.dist.press-new` or `.dist.press-old` folder may remain; the next build removes it, and you can delete it yourself. You may want `.*.press-*` in your `.gitignore`. Don't run two builds of the same output directory at the same time (for example `press build` while `press serve` is rebuilding); they share the staging folder and can break each other. The output directory needs a writable parent folder, and cannot be a mount point (for example a Docker volume): the swap fails with an error and the previous output stays in place. On Windows the swap also fails while another program holds files in the output directory open.
+
+### Static files
+
+Put images, fonts, CSS and other files you want deployed as-is in `static/`. They are copied to a folder of the same name in the output on every build (`static/logo.png` becomes `dist/static/logo.png`, linked as `/static/logo.png`; `--static dir` picks another folder name). Don't add files to `dist/` by hand: it is replaced on each build.
 
 ### Pages and sections
 

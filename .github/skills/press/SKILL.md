@@ -76,12 +76,15 @@ press build
 | `press create section <name> [--file f.md]` | Create a section (folder + `index.md`) |
 | `press update section <name> --file f.md` | Replace a section's index content |
 | `press delete section <name>` | Delete a section and all its pages |
-| `press build [-output dir]` | Build the site into `dist/` (default) |
-| `press serve [-port N] [-output dir]` | Build and serve locally; rebuilds on file changes |
-| `press tree` | Show a tree of all pages and sections |
-| `press --version` | Print the installed version |
+| `press rename page <old> <new>` | Rename a page; keeps a hand-written title, sets `updated_at`, rewrites Markdown links `[x](/old)` in other pages |
+| `press rename section <old> <new>` | Rename a section; same, links to the section and its pages are rewritten |
+| `press build [--output dir] [--static dir] [--drafts] [--minify] [--verbose]` | Build the site into `dist/` (default); drafts are skipped unless `--drafts`; `--minify` shrinks the HTML; `--verbose` prints each built page |
+| `press serve [--port N] [--host addr] [--output dir] [--static dir] [--drafts] [--interval d]` | Build and serve locally (127.0.0.1:8080 by default); rebuilds on file changes, polled every `--interval` (default `1s`); `--host 0.0.0.0` exposes it to the network |
+| `press tree` | Show a tree of all pages and sections; draft pages are marked `[draft]` |
+| `press check` | Validate pages and internal links (absolute, relative, `<a href>`); links to draft pages count as broken; exits 1 on issues |
+| `press --version` | Print the installed version (global flag: goes before the command) |
 
-Run any command with `--help` for detailed usage.
+Flags take one or two dashes. Run any command with `--help` for detailed usage.
 
 ---
 
@@ -96,11 +99,13 @@ my-site/
 │   └── blog/            # Section (subdirectory)
 │       ├── index.md     # → dist/blog/index.html  (section landing page)
 │       └── my-post.md   # → dist/blog/my-post.html
+├── static/              # Optional: copied as-is to dist/static/ (static/logo.png → dist/static/logo.png)
 └── dist/                # Generated output (created by `press build`)
 ```
 
 - **Pages** live directly under `pages/` → top-level HTML files.
 - **Sections** are subdirectories under `pages/`. Each must contain an `index.md`.
+- **Static files** (images, fonts, CSS) go in `static/`; they are copied to a same-named folder in the output on every build (`static/logo.png` → `dist/static/logo.png`). Don't add files to `dist/` by hand, it is replaced on each build.
 - Deploy the `dist/` folder to any static host (Netlify, GitHub Pages, S3, etc.).
 
 ---
@@ -126,6 +131,7 @@ updated_at: "2026-04-22T10:00:00Z"
 | `alias` | string | Alternative URL slug (reserved) |
 | `tags` | list | Content tags (reserved) |
 | `weight` | integer | Navigation order — lower = first; `0` = sorted after weighted items |
+| `draft` | boolean | `true` skips the page in `press build`/`press serve` unless `--drafts` is given; shown as `[draft]` in `press tree` and `press list page` |
 | `created_at` | RFC 3339 | Creation timestamp |
 | `updated_at` | RFC 3339 | Last-updated timestamp |
 
@@ -259,7 +265,8 @@ The `VIDEO_ID` is the 11-character identifier from the YouTube URL. Renders as a
 
 ## Key Behaviours
 
-- Output goes to `dist/` by default; override with `-output <dir>`.
+- Output goes to `dist/` by default; override with `--output <dir>`. `dist/` is replaced on each build, so keep hand-made files in `static/`.
+- After `press rename`, run `press check` to find links the rename could not fix (raw `<a href>`, relative links).
 - `press serve` watches for file changes and rebuilds automatically.
 - Errors go to `stderr`; content goes to `stdout` or disk — easy to script.
 - No telemetry, no internet connection required after installation.
