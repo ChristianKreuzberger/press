@@ -314,8 +314,9 @@ func Update(siteDir, name string, content []byte) error {
 }
 
 // Rename renames the page from oldName to newName.
-// It updates the title in the frontmatter to the humanised form of newName,
-// and sets updated_at to now.
+// It sets updated_at to now (adding frontmatter or the field when missing) and
+// replaces the title with the humanised base of newName, unless the title was
+// written by hand.
 func Rename(siteDir, oldName, newName string, now time.Time) error {
 	dir := PagesDir(siteDir)
 	oldPath, err := pagePath(siteDir, oldName)
@@ -352,14 +353,7 @@ func Rename(siteDir, oldName, newName string, now time.Time) error {
 	if err != nil {
 		return err
 	}
-	content, err = frontmatter.SetField(content, "title", frontmatter.Humanize(newName))
-	if err != nil {
-		return fmt.Errorf("rename page: %w", err)
-	}
-	content, err = frontmatter.SetField(content, "updated_at", now.UTC().Format(time.RFC3339))
-	if err != nil {
-		return fmt.Errorf("rename page: %w", err)
-	}
+	content = renameFrontmatter(content, oldName, newName, now)
 	// O_EXCL guards against a file appearing at newPath since the check above.
 	if err := writeNew(dir, newPath, content, info.Mode().Perm()); err != nil {
 		if errors.Is(err, os.ErrExist) {
@@ -376,6 +370,14 @@ func Rename(siteDir, oldName, newName string, now time.Time) error {
 	}
 	removeEmptyParents(dir, oldPath)
 	return nil
+}
+
+// renameFrontmatter applies the frontmatter changes of a rename.
+func renameFrontmatter(content []byte, oldName, newName string, now time.Time) []byte {
+	if frontmatter.IsAutoTitle(frontmatter.ParseStringField(content, "title"), oldName) {
+		content = frontmatter.UpsertField(content, "title", frontmatter.Humanize(path.Base(newName)))
+	}
+	return frontmatter.UpsertField(content, "updated_at", now.UTC().Format(time.RFC3339))
 }
 
 // rollbackRename removes the half-written newPath so both files aren't left

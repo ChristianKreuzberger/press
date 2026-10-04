@@ -212,3 +212,60 @@ func TestRenameTargetExists(t *testing.T) {
 		t.Errorf("expected ErrPageExists, got %v", err)
 	}
 }
+
+func TestRenameMinimalFrontmatter(t *testing.T) {
+	now := time.Date(2027, 1, 2, 3, 4, 5, 0, time.UTC)
+	for name, in := range map[string]string{
+		"no frontmatter":    "# About\n\nHi\n",
+		"title only":        "---\ntitle: \"about\"\n---\nHi\n",
+		"no title":          "---\ntags: []\n---\nHi\n",
+		"no updated_at":     "---\ntitle: \"About\"\nweight: 1\n---\nHi\n",
+		"empty frontmatter": "---\n---\nHi\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := Create(dir, "about", []byte(in)); err != nil {
+				t.Fatal(err)
+			}
+			if err := Rename(dir, "about", "about-us", now); err != nil {
+				t.Fatalf("Rename() error: %v", err)
+			}
+			b, err := os.ReadFile(filepath.Join(dir, "pages", "about-us.md"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			s := string(b)
+			if !strings.Contains(s, `title: "About Us"`) || !strings.Contains(s, `updated_at: "2027-01-02T03:04:05Z"`) || !strings.Contains(s, "Hi\n") {
+				t.Errorf("unexpected content: %q", s)
+			}
+		})
+	}
+}
+
+func TestRenameKeepsCustomTitle(t *testing.T) {
+	dir := t.TempDir()
+	if err := Create(dir, "about", []byte("---\ntitle: \"Our Story\"\nupdated_at: \"x\"\n---\nHi\n")); err != nil {
+		t.Fatal(err)
+	}
+	if err := Rename(dir, "about", "about-us", time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(filepath.Join(dir, "pages", "about-us.md"))
+	if !strings.Contains(string(b), `title: "Our Story"`) {
+		t.Errorf("custom title should be kept, got: %s", b)
+	}
+}
+
+func TestRenameNestedTitleUsesBaseName(t *testing.T) {
+	dir := t.TempDir()
+	if err := Create(dir, "blog/a", []byte("---\ntitle: \"a\"\n---\nHi\n")); err != nil {
+		t.Fatal(err)
+	}
+	if err := Rename(dir, "blog/a", "blog/my-post", time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(filepath.Join(dir, "pages", "blog", "my-post.md"))
+	if !strings.Contains(string(b), `title: "My Post"`) {
+		t.Errorf("title should come from the base name, got: %s", b)
+	}
+}
