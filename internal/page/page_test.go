@@ -269,3 +269,112 @@ func TestRenameNestedTitleUsesBaseName(t *testing.T) {
 		t.Errorf("title should come from the base name, got: %s", b)
 	}
 }
+
+func skipIfRoot(t *testing.T) {
+	t.Helper()
+	if os.Geteuid() == 0 {
+		t.Skip("permission errors cannot be provoked as root")
+	}
+}
+
+func TestRenameInvalidNames(t *testing.T) {
+	dir := t.TempDir()
+	if err := Create(dir, "about", []byte("# About\n")); err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct{ name, oldName, newName string }{
+		{"invalid old name", "../evil", "ok"},
+		{"invalid new name", "about", "../evil"},
+		{"new name too deep", "about", "a/b/c"},
+		{"index cannot be renamed", "index", "home"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := Rename(dir, tt.oldName, tt.newName, time.Now())
+			if !errors.Is(err, ErrInvalidName) {
+				t.Errorf("expected ErrInvalidName, got %v", err)
+			}
+		})
+	}
+	if _, err := os.Stat(filepath.Join(PagesDir(dir), "about.md")); err != nil {
+		t.Errorf("source must be untouched: %v", err)
+	}
+}
+
+func TestRenameNameConflict(t *testing.T) {
+	dir := t.TempDir()
+	if err := Create(dir, "about", []byte("# About\n")); err != nil {
+		t.Fatal(err)
+	}
+	if err := Create(dir, "blog/post", []byte("# Post\n")); err != nil {
+		t.Fatal(err)
+	}
+	// "blog" is already a section directory.
+	if err := Rename(dir, "about", "blog", time.Now()); !errors.Is(err, ErrNameConflict) {
+		t.Errorf("section clash: expected ErrNameConflict, got %v", err)
+	}
+	// "about" is a page, so it cannot also be a section.
+	if err := Rename(dir, "blog/post", "about/post", time.Now()); !errors.Is(err, ErrNameConflict) {
+		t.Errorf("page clash: expected ErrNameConflict, got %v", err)
+	}
+}
+
+func TestRenameUnreadableSource(t *testing.T) {
+	skipIfRoot(t)
+	dir := t.TempDir()
+	if err := Create(dir, "about", []byte("# About\n")); err != nil {
+		t.Fatal(err)
+	}
+	src := filepath.Join(PagesDir(dir), "about.md")
+	if err := os.Chmod(src, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(src, 0644) })
+	if err := Rename(dir, "about", "about-us", time.Now()); err == nil {
+		t.Fatal("expected an error for an unreadable source")
+	}
+	if _, err := os.Stat(filepath.Join(PagesDir(dir), "about-us.md")); err == nil {
+		t.Error("target must not be created")
+	}
+}
+
+func TestRenameReadOnlyPagesDir(t *testing.T) {
+	skipIfRoot(t)
+	dir := t.TempDir()
+	if err := Create(dir, "about", []byte("# About\n")); err != nil {
+		t.Fatal(err)
+	}
+	pages := PagesDir(dir)
+	if err := os.Chmod(pages, 0555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(pages, 0755) })
+	if err := Rename(dir, "about", "about-us", time.Now()); err == nil {
+		t.Fatal("expected an error when pages/ is read-only")
+	}
+	if _, err := os.Stat(filepath.Join(pages, "about.md")); err != nil {
+		t.Errorf("source must survive a failed rename: %v", err)
+	}
+}
+
+func TestRenameRollsBackWhenSourceCannotBeRemoved(t *testing.T) {
+	skipIfRoot(t)
+	dir := t.TempDir()
+	if err := Create(dir, "blog/post", []byte("# Post\n")); err != nil {
+		t.Fatal(err)
+	}
+	srcDir := filepath.Join(PagesDir(dir), "blog")
+	if err := os.Chmod(srcDir, 0555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(srcDir, 0755) })
+	if err := Rename(dir, "blog/post", "news/post", time.Now()); err == nil {
+		t.Fatal("expected an error when the source cannot be removed")
+	}
+	if _, err := os.Stat(filepath.Join(srcDir, "post.md")); err != nil {
+		t.Errorf("source must survive: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(PagesDir(dir), "news")); err == nil {
+		t.Error("half-written target and its new parent must be rolled back")
+	}
+}

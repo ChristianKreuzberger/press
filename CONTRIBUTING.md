@@ -27,3 +27,10 @@ Bug fixes should start with a failing test, then the fix.
 - Fill out the [PR template](.github/PULL_REQUEST_TEMPLATE.md), including the usage example or e2e test section.
 - Keep dependencies minimal; prefer the standard library.
 - Add new or changed commands to `README.md`.
+
+## Coverage
+
+`make coverage` runs the tests and writes `coverage.out` and `coverage.html`.
+The e2e tests run a compiled `press` binary, so the target builds that binary
+with `-cover` (enabled by `PRESS_E2E_COVERDIR`) and merges its coverage with the
+unit-test profile. Plain `go test ./...` is unaffected.

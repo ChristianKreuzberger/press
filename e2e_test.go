@@ -18,7 +18,17 @@ func TestMain(m *testing.M) {
 	}
 
 	pressBinary = filepath.Join(tmp, "press")
-	cmd := exec.Command("go", "build", "-o", pressBinary, ".")
+	buildArgs := []string{"build"}
+	// With PRESS_E2E_COVERDIR set (make coverage, CI), build an instrumented
+	// binary so the e2e runs count towards coverage of package main. A separate
+	// variable is needed because `go test -cover` overrides GOCOVERDIR for the
+	// test process; children inherit the GOCOVERDIR set here.
+	if dir := os.Getenv("PRESS_E2E_COVERDIR"); dir != "" {
+		buildArgs = append(buildArgs, "-cover", "-covermode=atomic")
+		_ = os.Setenv("GOCOVERDIR", dir)
+	}
+	buildArgs = append(buildArgs, "-o", pressBinary, ".")
+	cmd := exec.Command("go", buildArgs...)
 	cmd.Dir = "."
 	if out, err := cmd.CombinedOutput(); err != nil {
 		_ = os.RemoveAll(tmp)
@@ -415,7 +425,6 @@ func TestE2ESectionTOC(t *testing.T) {
 		t.Errorf("child page should not have a TOC section, got:\n%s", postContent)
 	}
 }
-
 
 func TestE2ECheck(t *testing.T) {
 	siteDir := t.TempDir()
