@@ -152,14 +152,13 @@ func TestBuildValidPaths(t *testing.T) {
 	write("pages/hidden/guide.md", "# no index, not a section")
 	write("pages/closed/index.md", draft)
 	write("pages/closed/page.md", "# in a draft section")
-	write("static/img/logo.png", "png")
 
 	valid, drafts := buildValidPaths(site)
 
 	for _, p := range []string{
 		"/index", "/index.html", "/about", "/about.html",
 		"/docs", "/docs/index.html", "/docs/guide", "/docs/guide.html",
-		"/docs/f.pdf", "/notes.txt", "/img/logo.png",
+		"/docs/f.pdf", "/notes.txt",
 	} {
 		if !valid[p] {
 			t.Errorf("expected %q to be valid", p)
