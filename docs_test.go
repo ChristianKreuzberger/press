@@ -25,8 +25,16 @@ func TestDocsCoverCLI(t *testing.T) {
 
 	// Commands: the cases of the switch in main().
 	mainSrc := src("main.go")
-	sw := mainSrc[strings.Index(mainSrc, "switch args[0]"):]
-	sw = sw[:strings.Index(sw, "default:")]
+	swStart := strings.Index(mainSrc, "switch args[0]")
+	if swStart < 0 {
+		t.Fatal(`main.go has no "switch args[0]"; has the command switch moved?`)
+	}
+	sw := mainSrc[swStart:]
+	swEnd := strings.Index(sw, "default:")
+	if swEnd < 0 {
+		t.Fatal(`main.go's command switch has no "default:" case`)
+	}
+	sw = sw[:swEnd]
 	cmds := regexp.MustCompile(`case "(\w+)":`).FindAllStringSubmatch(sw, -1)
 	if len(cmds) < 10 {
 		t.Fatalf("found only %d commands in main.go; has the switch moved?", len(cmds))
