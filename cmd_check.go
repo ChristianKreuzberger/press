@@ -13,13 +13,6 @@ import (
 	"github.com/ChristianKreuzberger/press/internal/page"
 )
 
-// linkStartRe matches the start of a Markdown inline link, up to and including
-// the "(" before the destination. Group 1 is "!" for image links.
-var linkStartRe = regexp.MustCompile(`(!?)\[[^\]]*\]\(`)
-
-// inlineCodeRe matches inline code spans so links inside them can be ignored.
-var inlineCodeRe = regexp.MustCompile("`[^`\n]*`")
-
 // defaultStaticDir is the static directory `press build` uses by default;
 // `press check` takes no flags, so it assumes this one.
 const defaultStaticDir = "static"
@@ -121,9 +114,6 @@ func runCheck(args []string) {
 // schemeRe matches a URL scheme such as "https:" or "mailto:".
 var schemeRe = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9+.-]*:`)
 
-// htmlHrefRe matches the href of a raw HTML anchor. Group 2 or 3 is the value.
-var htmlHrefRe = regexp.MustCompile(`(?i)<a\s[^>]*?href\s*=\s*("([^"]*)"|'([^']*)')`)
-
 // checkPage validates a single page and returns a slice of issue descriptions.
 // baseDir is the output directory of the page ("/" or "/<section>/"), which
 // relative links are resolved against.
@@ -198,73 +188,6 @@ func internalTarget(dest, baseDir string) (target string, ok bool) {
 		dest = "/index"
 	}
 	return dest, true
-}
-
-// pageLinks returns the destinations of all non-image Markdown links and raw
-// HTML anchors in content. Links inside fenced code blocks and inline code
-// spans are ignored. Destinations are returned as written.
-func pageLinks(content string) []string {
-	var prose []string
-	var fence string // the opening fence marker while inside a fenced block
-	for _, line := range strings.Split(content, "\n") {
-		trimmed := strings.TrimSpace(line)
-		if fence != "" {
-			// A closing fence is at least as long as the opener and has no info string.
-			if strings.HasPrefix(trimmed, fence) && strings.Trim(trimmed, fence[:1]) == "" {
-				fence = ""
-			}
-			continue
-		}
-		if strings.HasPrefix(trimmed, "```") || strings.HasPrefix(trimmed, "~~~") {
-			fence = strings.Repeat(trimmed[:1], len(trimmed)-len(strings.TrimLeft(trimmed, trimmed[:1])))
-			continue
-		}
-		prose = append(prose, inlineCodeRe.ReplaceAllString(line, ""))
-	}
-	text := strings.Join(prose, "\n")
-
-	var links []string
-	for _, m := range linkStartRe.FindAllStringSubmatchIndex(text, -1) {
-		if text[m[2]:m[3]] == "!" {
-			continue // skip image links
-		}
-		if dest := linkDestination(text[m[1]:]); dest != "" {
-			links = append(links, dest)
-		}
-	}
-	for _, m := range htmlHrefRe.FindAllStringSubmatch(text, -1) {
-		links = append(links, m[2]+m[3])
-	}
-	return links
-}
-
-// linkDestination parses a link destination from s, which starts right after
-// the "(" of an inline link. It accepts "<...>" destinations and bare ones
-// with balanced parentheses, and stops at whitespace so an optional title
-// ("...") is left out.
-func linkDestination(s string) string {
-	s = strings.TrimLeft(s, " \t")
-	if strings.HasPrefix(s, "<") {
-		if end := strings.IndexAny(s, ">\n"); end > 0 && s[end] == '>' {
-			return s[1:end]
-		}
-		return ""
-	}
-	depth := 0
-	for i := 0; i < len(s); i++ {
-		switch s[i] {
-		case ' ', '\t', '\n':
-			return s[:i]
-		case '(':
-			depth++
-		case ')':
-			if depth == 0 {
-				return s[:i]
-			}
-			depth--
-		}
-	}
-	return s
 }
 
 // buildValidPaths returns the set of internal link paths that resolve to a

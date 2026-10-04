@@ -197,7 +197,9 @@ func Update(siteDir, name string, content []byte) error {
 }
 
 // Rename renames the section from oldName to newName.
-// It updates the title and updated_at in the section's index.md.
+// It sets updated_at in the section's index.md (adding frontmatter or the field
+// when missing) and replaces the title with the humanised newName, unless the
+// title was written by hand.
 func Rename(siteDir, oldName, newName string, now time.Time) error {
 	if err := validateName(oldName); err != nil {
 		return err
@@ -224,14 +226,10 @@ func Rename(siteDir, oldName, newName string, now time.Time) error {
 	if err != nil {
 		return err
 	}
-	content, err = frontmatter.SetField(content, "title", frontmatter.Humanize(newName))
-	if err != nil {
-		return fmt.Errorf("rename section: %w", err)
+	if frontmatter.IsAutoTitle(frontmatter.ParseStringField(content, "title"), oldName) {
+		content = frontmatter.UpsertField(content, "title", frontmatter.Humanize(newName))
 	}
-	content, err = frontmatter.SetField(content, "updated_at", now.UTC().Format(time.RFC3339))
-	if err != nil {
-		return fmt.Errorf("rename section: %w", err)
-	}
+	content = frontmatter.UpsertField(content, "updated_at", now.UTC().Format(time.RFC3339))
 	if err := os.Rename(oldDir, newDir); err != nil {
 		return err
 	}

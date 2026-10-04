@@ -274,6 +274,37 @@ func SetField(content []byte, field, value string) ([]byte, error) {
 	return []byte(s[:start] + strings.Join(lines, "\n") + s[end:]), nil
 }
 
+// UpsertField is like SetField but never fails: when the field is missing it
+// is added at the end of the frontmatter block, and when there is no
+// frontmatter block one is added in front of the content. Existing line
+// endings (LF or CRLF) are kept.
+func UpsertField(content []byte, field, value string) []byte {
+	s := string(content)
+	line := field + ": " + strconv.Quote(value)
+	start, end, _, ok := split(s)
+	if !ok {
+		return []byte(delim + "\n" + line + "\n" + delim + "\n" + s)
+	}
+	if out, err := SetField(content, field, value); err == nil {
+		return out
+	}
+	eol := "\n"
+	if strings.HasSuffix(s[:start], "\r\n") {
+		eol = "\r\n"
+	}
+	return []byte(s[:end] + line + eol + s[end:])
+}
+
+// IsAutoTitle reports whether title looks like one that press generated for
+// the page or section called name: empty, the raw name (what "create" writes)
+// or its humanised form. Only the last "/" segment of name is considered.
+func IsAutoTitle(title, name string) bool {
+	if i := strings.LastIndexByte(name, '/'); i >= 0 {
+		name = name[i+1:]
+	}
+	return title == "" || title == name || title == Humanize(name)
+}
+
 // Strip removes YAML frontmatter from the beginning of a markdown document.
 // If the content has no complete frontmatter block, it is returned unchanged.
 func Strip(content string) string {

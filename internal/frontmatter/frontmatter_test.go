@@ -499,3 +499,42 @@ func TestSetField(t *testing.T) {
 		}
 	})
 }
+
+func TestUpsertField(t *testing.T) {
+	tests := []struct {
+		name, in, want string
+	}{
+		{"replace", "---\ntitle: \"A\"\n---\nbody\n", "---\ntitle: \"B\"\n---\nbody\n"},
+		{"add missing", "---\ntags: []\n---\nbody\n", "---\ntags: []\ntitle: \"B\"\n---\nbody\n"},
+		{"add missing crlf", "---\r\ntags: []\r\n---\r\nbody\r\n", "---\r\ntags: []\r\ntitle: \"B\"\r\n---\r\nbody\r\n"},
+		{"empty block", "---\n---\nbody\n", "---\ntitle: \"B\"\n---\nbody\n"},
+		{"no frontmatter", "# Hi\n", "---\ntitle: \"B\"\n---\n# Hi\n"},
+		{"unclosed block is body", "---\nx: 1\n", "---\ntitle: \"B\"\n---\n---\nx: 1\n"},
+		{"empty file", "", "---\ntitle: \"B\"\n---\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := string(UpsertField([]byte(tt.in), "title", "B")); got != tt.want {
+				t.Errorf("UpsertField() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIsAutoTitle(t *testing.T) {
+	tests := []struct {
+		title, name string
+		want        bool
+	}{
+		{"", "about", true},
+		{"about", "about", true},
+		{"About Us", "about-us", true},
+		{"My Post", "blog/my-post", true},
+		{"Our Story", "about", false},
+	}
+	for _, tt := range tests {
+		if got := IsAutoTitle(tt.title, tt.name); got != tt.want {
+			t.Errorf("IsAutoTitle(%q, %q) = %v, want %v", tt.title, tt.name, got, tt.want)
+		}
+	}
+}

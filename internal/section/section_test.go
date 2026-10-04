@@ -456,3 +456,44 @@ func TestIndexIsDirectoryIsNotASection(t *testing.T) {
 		t.Errorf("List should skip a directory whose index.md is a directory, got %v", sections)
 	}
 }
+
+func TestRenameMinimalFrontmatter(t *testing.T) {
+	now := time.Date(2027, 1, 2, 3, 4, 5, 0, time.UTC)
+	for name, in := range map[string]string{
+		"no frontmatter": "# Blog\n",
+		"title only":     "---\ntitle: \"blog\"\n---\n# Blog\n",
+		"no updated_at":  "---\ntitle: \"Blog\"\n---\n# Blog\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := Create(dir, "blog", []byte(in)); err != nil {
+				t.Fatal(err)
+			}
+			if err := Rename(dir, "blog", "my-journal", now); err != nil {
+				t.Fatalf("Rename() error: %v", err)
+			}
+			b, err := os.ReadFile(filepath.Join(dir, "pages", "my-journal", "index.md"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			s := string(b)
+			if !strings.Contains(s, `title: "My Journal"`) || !strings.Contains(s, `updated_at: "2027-01-02T03:04:05Z"`) {
+				t.Errorf("unexpected content: %q", s)
+			}
+		})
+	}
+}
+
+func TestRenameKeepsCustomTitle(t *testing.T) {
+	dir := t.TempDir()
+	if err := Create(dir, "blog", []byte("---\ntitle: \"Thoughts\"\n---\n# Blog\n")); err != nil {
+		t.Fatal(err)
+	}
+	if err := Rename(dir, "blog", "journal", time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(filepath.Join(dir, "pages", "journal", "index.md"))
+	if !strings.Contains(string(b), `title: "Thoughts"`) {
+		t.Errorf("custom title should be kept, got: %s", b)
+	}
+}
