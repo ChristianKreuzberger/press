@@ -497,3 +497,96 @@ func TestRenameKeepsCustomTitle(t *testing.T) {
 		t.Errorf("custom title should be kept, got: %s", b)
 	}
 }
+
+func TestRenameInvalidNames(t *testing.T) {
+	dir := t.TempDir()
+	if err := Create(dir, "blog", []byte("# Blog\n")); err != nil {
+		t.Fatal(err)
+	}
+	if err := Rename(dir, "../evil", "ok", time.Now()); !errors.Is(err, ErrInvalidName) {
+		t.Errorf("invalid old name: expected ErrInvalidName, got %v", err)
+	}
+	if err := Rename(dir, "blog", "../evil", time.Now()); !errors.Is(err, ErrInvalidName) {
+		t.Errorf("invalid new name: expected ErrInvalidName, got %v", err)
+	}
+}
+
+func TestRenameNameConflictWithPage(t *testing.T) {
+	dir := t.TempDir()
+	if err := Create(dir, "blog", []byte("# Blog\n")); err != nil {
+		t.Fatal(err)
+	}
+	pageFile := filepath.Join(dir, "pages", "about.md")
+	if err := os.WriteFile(pageFile, []byte("# About\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := Rename(dir, "blog", "about", time.Now()); !errors.Is(err, ErrNameConflict) {
+		t.Errorf("expected ErrNameConflict, got %v", err)
+	}
+	assertIntact(t, pageFile)
+}
+
+func TestRenameUnreadableIndex(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("permission errors cannot be provoked as root")
+	}
+	dir := t.TempDir()
+	if err := Create(dir, "blog", []byte("# Blog\n")); err != nil {
+		t.Fatal(err)
+	}
+	idx := filepath.Join(dir, "pages", "blog", "index.md")
+	if err := os.Chmod(idx, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(idx, 0644) })
+	if err := Rename(dir, "blog", "news", time.Now()); err == nil {
+		t.Fatal("expected an error for an unreadable index.md")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "pages", "news")); err == nil {
+		t.Error("section must not be renamed")
+	}
+}
+
+func TestRenameRenameFails(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("permission errors cannot be provoked as root")
+	}
+	dir := t.TempDir()
+	if err := Create(dir, "blog", []byte("# Blog\n")); err != nil {
+		t.Fatal(err)
+	}
+	pages := filepath.Join(dir, "pages")
+	if err := os.Chmod(pages, 0555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(pages, 0755) })
+	if err := Rename(dir, "blog", "news", time.Now()); err == nil {
+		t.Fatal("expected an error when pages/ is read-only")
+	}
+	if _, err := os.Stat(filepath.Join(pages, "blog", "index.md")); err != nil {
+		t.Errorf("section must be intact: %v", err)
+	}
+}
+
+func TestRenameRollsBackWhenIndexCannotBeWritten(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("permission errors cannot be provoked as root")
+	}
+	dir := t.TempDir()
+	if err := Create(dir, "blog", []byte("# Blog\n")); err != nil {
+		t.Fatal(err)
+	}
+	idx := filepath.Join(dir, "pages", "blog", "index.md")
+	if err := os.Chmod(idx, 0444); err != nil {
+		t.Fatal(err)
+	}
+	if err := Rename(dir, "blog", "news", time.Now()); err == nil {
+		t.Fatal("expected an error when index.md is read-only")
+	}
+	if _, err := os.Stat(idx); err != nil {
+		t.Errorf("directory rename must be rolled back: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "pages", "news")); err == nil {
+		t.Error("new section directory must not remain")
+	}
+}
