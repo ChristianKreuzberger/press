@@ -1,7 +1,10 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -79,5 +82,104 @@ func TestInternalTarget(t *testing.T) {
 		if got != tt.want || ok != tt.ok {
 			t.Errorf("internalTarget(%q, %q) = %q, %v; want %q, %v", tt.dest, tt.base, got, ok, tt.want, tt.ok)
 		}
+	}
+}
+
+func TestCheckPage(t *testing.T) {
+	valid := map[string]bool{"/about": true, "/index": true, "/blog": true, "/blog/post": true, "/my page": true}
+	drafts := map[string]bool{"/wip": true}
+	const fm = "---\ntitle: \"T\"\n---\n"
+	tests := []struct {
+		name, base, content string
+		want                []string // substrings, one per expected issue
+	}{
+		{"valid link", "/", fm + "[a](/about)", nil},
+		{"home link", "/", fm + "[home](/)", nil},
+		{"broken link", "/", fm + "[a](/nope)", []string{"broken link → /nope (page not found)"}},
+		{"draft link", "/", fm + "[a](/wip)", []string{"/wip (page is a draft"}},
+		{"anchor only", "/", fm + "[a](#top)", nil},
+		{"fragment and query", "/", fm + "[a](/about?x=1#y)", nil},
+		{"external ignored", "/", fm + "[a](https://example.com/nope) [b](mailto:a@b.c) [c](//cdn.example/x)", nil},
+		{"code ignored", "/", fm + "`[a](/nope)`\n\n```\n[b](/nope)\n```\ntext", nil},
+		{"relative in section", "/blog/", fm + "[a](post)", nil},
+		{"relative parent", "/blog/", fm + "[a](../about)", nil},
+		{"relative above root", "/", fm + "[a](../about)", []string{"broken link"}},
+		{"percent encoded", "/", fm + "[a](/my%20page)", nil},
+		{"section link with slash", "/", fm + "[a](/blog/)", nil},
+		{"missing title", "/", "---\n---\nbody", []string{"missing title"}},
+		{"empty content", "/", "---\ntitle: \"T\"\n---\n  \n", []string{"empty page content"}},
+		{"two broken links", "/", fm + "[a](/x) [b](/y)", []string{"/x", "/y"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := checkPage("pages/p.md", tt.base, []byte(tt.content), valid, drafts)
+			if len(got) != len(tt.want) {
+				t.Fatalf("got %d issues %q, want %d", len(got), got, len(tt.want))
+			}
+			for i, w := range tt.want {
+				if !strings.Contains(got[i], w) {
+					t.Errorf("issue %d = %q, want it to contain %q", i, got[i], w)
+				}
+				if !strings.HasPrefix(got[i], "pages/p.md: ") {
+					t.Errorf("issue %q should be prefixed with the page path", got[i])
+				}
+			}
+		})
+	}
+}
+
+func TestBuildValidPaths(t *testing.T) {
+	site := t.TempDir()
+	write := func(rel, content string) {
+		t.Helper()
+		p := filepath.Join(site, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	draft := "---\ntitle: \"D\"\ndraft: true\n---\nbody"
+	write("pages/index.md", "# Home")
+	write("pages/about.md", "# About")
+	write("pages/wip.md", draft)
+	write("pages/notes.txt", "not a page")
+	write("pages/docs/index.md", "# Docs")
+	write("pages/docs/guide.md", "# Guide")
+	write("pages/docs/secret.md", draft)
+	write("pages/docs/f.pdf", "pdf")
+	write("pages/hidden/guide.md", "# no index, not a section")
+	write("pages/closed/index.md", draft)
+	write("pages/closed/page.md", "# in a draft section")
+	write("static/img/logo.png", "png")
+
+	valid, drafts := buildValidPaths(site)
+
+	for _, p := range []string{
+		"/index", "/index.html", "/about", "/about.html",
+		"/docs", "/docs/index.html", "/docs/guide", "/docs/guide.html",
+		"/docs/f.pdf", "/notes.txt", "/img/logo.png",
+	} {
+		if !valid[p] {
+			t.Errorf("expected %q to be valid", p)
+		}
+	}
+	for _, p := range []string{"/wip", "/wip.html", "/docs/secret", "/closed", "/closed/page"} {
+		if !drafts[p] || valid[p] {
+			t.Errorf("expected %q only in drafts (drafts=%v valid=%v)", p, drafts[p], valid[p])
+		}
+	}
+	for _, p := range []string{"/docs/index", "/hidden", "/hidden/guide", "/about.md"} {
+		if valid[p] || drafts[p] {
+			t.Errorf("did not expect %q to be known", p)
+		}
+	}
+}
+
+func TestBuildValidPathsNoPagesDir(t *testing.T) {
+	valid, drafts := buildValidPaths(t.TempDir())
+	if len(valid) != 0 || len(drafts) != 0 {
+		t.Errorf("expected empty sets, got %v %v", valid, drafts)
 	}
 }
